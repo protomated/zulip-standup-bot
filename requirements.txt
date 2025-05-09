@@ -1,0 +1,10 @@
+# Core dependencies
+zulip==0.8.2
+zulip-bots==0.8.2
+
+# AI integration
+openai>=0.27.0
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2022.1

@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  standup-bot:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - ZULIP_EMAIL=${ZULIP_EMAIL:-standup-bot@example.com}
+      - ZULIP_API_KEY=${ZULIP_API_KEY:-your_api_key_here}
+      - ZULIP_SITE=${ZULIP_SITE:-https://your-zulip-site.zulipchat.com}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_api_key_here}
+    restart: unless-stopped
