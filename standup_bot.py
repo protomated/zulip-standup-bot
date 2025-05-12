@@ -6,6 +6,7 @@ import time
 import datetime
 import re
 import os
+import logging
 
 from standup_manager import StandupManager
 from storage_manager import StorageManager
@@ -15,6 +16,7 @@ from ai_summary import AISummaryGenerator
 from report_generator import ReportGenerator
 from templates import Templates
 from config import Config
+from setup_wizard import SetupWizard
 
 
 class StandupBotHandler:
@@ -23,19 +25,24 @@ class StandupBotHandler:
     """
 
     def usage(self) -> str:
+        """Return a brief help message for the bot"""
         return '''
-        StandupBot - Automate your team's standups, check-ins, and recurring status meetings
+# StandupBot
 
-        Commands:
-        * `help` - Show this help message
-        * `setup` - Set up a new standup meeting
-        * `list` - List all standups you're part of
-        * `status` - Submit your status for a standup
-        * `remind` - Send reminders to users who haven't submitted their status
-        * `report` - Generate a report for a standup
-        * `cancel` - Cancel a standup meeting
-        * `settings` - Change settings for a standup
-        '''
+Automate your team's standups, check-ins, and recurring status meetings.
+
+## Quick Start
+Type `setup` to create your first standup meeting in under 60 seconds.
+
+## Basic Commands
+* `help` - Show detailed help
+* `setup` - Set up a new standup meeting
+* `list` - List all standups you're part of
+* `status [standup_id]` - Submit your status
+* `report [standup_id]` - Generate a report
+
+Type `help` for more detailed information.
+'''
 
     def initialize(self, bot_handler: BotHandler) -> None:
         """
@@ -58,6 +65,7 @@ class StandupBotHandler:
         self.ai_summary = AISummaryGenerator(self.config.openai_api_key)
         self.report_generator = ReportGenerator(self.storage_manager, self.ai_summary)
         self.templates = Templates()
+        self.setup_wizard = SetupWizard(bot_handler, self.standup_manager, self.templates)
 
         # Initialize the scheduled tasks if any
         self.schedule_manager.initialize_scheduled_tasks()
@@ -80,6 +88,16 @@ class StandupBotHandler:
         content = message['content'].strip()
         sender_id = message['sender_id']
 
+        # Check if user is in setup process
+        if self.setup_wizard.is_user_in_setup(sender_id):
+            # Handle response in setup process
+            setup_complete = self.setup_wizard.handle_response(sender_id, content)
+            if not setup_complete:
+                # Setup is still in progress, no need to process as a command
+                return
+            # If setup is complete, fall through to normal command processing
+
+        # Process as a normal command
         if content.startswith('setup'):
             self._handle_setup_command(message)
         elif content.startswith('list'):
@@ -94,6 +112,8 @@ class StandupBotHandler:
             self._handle_cancel_command(message)
         elif content.startswith('settings'):
             self._handle_settings_command(message)
+        elif content.startswith('help'):
+            self.bot_handler.send_reply(message, self.templates.help_message())
         else:
             # Send help message by default
             self.bot_handler.send_reply(message, self.usage())
@@ -108,9 +128,23 @@ class StandupBotHandler:
 
     # Helper methods for handling specific commands
     def _handle_setup_command(self, message: Dict[str, Any]) -> None:
-        # Implementation for setting up a new standup
-        # This would handle the interactive setup flow
-        pass
+        """
+        Handle the setup command to start the interactive setup process
+        """
+        sender_id = message['sender_id']
+
+        # Check if user is already in setup process
+        if self.setup_wizard.is_user_in_setup(sender_id):
+            self.bot_handler.send_reply(message, 
+                self.templates.error_message("You're already in the setup process. Please complete it or type 'cancel' to start over."))
+            return
+
+        # Send welcome message if this is the first time
+        if not self.storage_manager.get_user_standups(sender_id):
+            self.bot_handler.send_reply(message, self.templates.welcome_message())
+
+        # Start the setup process
+        self.setup_wizard.start_setup(sender_id)
 
     # More command handlers and helper methods
     # ...
