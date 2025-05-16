@@ -68,7 +68,7 @@ class StandupManager:
         """Get all standups a user is part of"""
         with self.storage.use_storage(['standups']) as cache:
             standups = cache.get('standups') or {}
-            return [s for s in standups.values() if user_id in s['participants']]
+            return [s for s in standups.values() if user_id in s['participants'] or user_id == s.get('creator_id')]
 
     def is_standup_day(self, standup: Dict[str, Any]) -> bool:
         """Check if today is a scheduled day for the standup"""

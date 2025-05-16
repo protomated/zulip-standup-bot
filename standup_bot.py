@@ -141,10 +141,6 @@ Type `help` for more detailed information.
                 self.templates.error_message("You're already in the setup process. Please complete it or type 'cancel' to start over."))
             return
 
-        # Send welcome message if this is the first time
-        if not self.storage_manager.get_user_standups(sender_id):
-            self.bot_handler.send_reply(message, self.templates.welcome_message())
-
         # Start the setup process
         self.setup_wizard.start_setup(sender_id)
 

@@ -133,7 +133,7 @@ class SetupWizard:
 
         # Convert day numbers to day names
         day_names = {
-            1: 'monday', 2: 'tuesday', 3: 'wednesday', 
+            1: 'monday', 2: 'tuesday', 3: 'wednesday',
             4: 'thursday', 5: 'friday', 6: 'saturday', 7: 'sunday'
         }
         day_list = [day_names[day] for day in days]
@@ -222,7 +222,7 @@ class SetupWizard:
             try:
                 # Process participants
                 participants_raw = self.setup_states[user_id]['participants_raw']
-                participants = self._process_participants(participants_raw)
+                participants = self._process_participants(participants_raw, user_id)
 
                 # Create schedule dict
                 schedule = {
@@ -274,13 +274,16 @@ class SetupWizard:
             ))
             return False
 
-    def _process_participants(self, participants_raw: str) -> List[int]:
+    def _process_participants(self, participants_raw: str, creator_id: int = None) -> List[int]:
         """Process participants string into a list of user IDs"""
         # Check for 'all' keyword
         if participants_raw.lower() == 'all':
             # In a real implementation, you would get all users in the stream
-            # For now, we'll just return a placeholder list
-            return [1, 2, 3]  # Placeholder for all users
+            # For now, we'll just return a placeholder list with the creator included
+            if creator_id is not None:
+                return [creator_id, 1, 2, 3]  # Include creator and placeholder users
+            else:
+                return [1, 2, 3]  # Placeholder for all users
 
         # Parse @mentions
         # In Zulip, mentions look like "@**User Name**"
@@ -307,9 +310,16 @@ class SetupWizard:
             except Exception as e:
                 self.logger.error(f"Error processing participant {mention}: {str(e)}")
 
-        # If no valid participants were found, include the creator
+        # Always include the creator in the participants list if provided
+        if creator_id is not None and creator_id not in participants:
+            participants.append(creator_id)
+
+        # If no valid participants were found, include a placeholder
         if not participants:
-            participants = [1]  # Placeholder for creator
+            if creator_id is not None:
+                participants = [creator_id]  # Use the actual creator ID
+            else:
+                participants = [1]  # Placeholder for creator
 
         return participants
 
