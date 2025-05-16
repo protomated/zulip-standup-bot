@@ -10,3 +10,4 @@ wheels/
 .venv
 .junie
 !.junie/guidelines.md
+.idea

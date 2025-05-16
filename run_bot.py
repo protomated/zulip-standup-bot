@@ -3,6 +3,7 @@ import sys
 import os
 import argparse
 import logging
+import importlib.util
 from zulip_bots.run import run_message_handler_for_bot
 from zulip_bots.lib import zulip_env_vars_are_present
 
@@ -67,7 +68,26 @@ def main():
     else:
         logger.info("Starting StandupBot with environment variables")
 
-    run_message_handler_for_bot(bot_name, config_file)
+    # Load the bot module
+    bot_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "standup_bot.py")
+    spec = importlib.util.spec_from_file_location("standup_bot", bot_path)
+    lib_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lib_module)
+
+    # Set additional parameters
+    quiet = not args.debug  # Set quiet mode based on debug flag
+    bot_config_file = None  # No separate bot config file
+    bot_source = "source"   # Bot source is from a file
+
+    # Call with all required parameters
+    run_message_handler_for_bot(
+        lib_module=lib_module,
+        quiet=quiet,
+        config_file=config_file,
+        bot_config_file=bot_config_file,
+        bot_name=bot_name,
+        bot_source=bot_source
+    )
 
 
 if __name__ == '__main__':
