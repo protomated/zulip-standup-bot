@@ -18,4 +18,3 @@ jobs:
           server: '${{ secrets.CAPROVER_SERVER }}'
           app: '${{ secrets.CAPROVER_APP }}'
           token: '${{ secrets.CAPROVER_TOKEN }}'
-          image: 'protomated/zulip-standup-bot:latest'
