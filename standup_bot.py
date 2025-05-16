@@ -95,7 +95,9 @@ Type `help` for more detailed information.
             if not setup_complete:
                 # Setup is still in progress, no need to process as a command
                 return
-            # If setup is complete, fall through to normal command processing
+            # If setup is complete, acknowledge completion and return
+            # This prevents falling through to normal command processing which could start a new setup
+            return
 
         # Process as a normal command
         if content.startswith('setup'):
@@ -135,7 +137,7 @@ Type `help` for more detailed information.
 
         # Check if user is already in setup process
         if self.setup_wizard.is_user_in_setup(sender_id):
-            self.bot_handler.send_reply(message, 
+            self.bot_handler.send_reply(message,
                 self.templates.error_message("You're already in the setup process. Please complete it or type 'cancel' to start over."))
             return
 
@@ -151,13 +153,13 @@ Type `help` for more detailed information.
 
     def _is_bot_mentioned(self, message: Dict[str, Any]) -> bool:
         """Check if the bot is mentioned in a message"""
-        bot_username = self.bot_handler.user_email.split('@')[0]
+        bot_username = self.config.email.split('@')[0]
         pattern = f"@\\*\\*{bot_username}\\*\\*"
         return bool(re.search(pattern, message['content']))
 
     def _extract_content_without_mention(self, message: Dict[str, Any]) -> str:
         """Remove the bot mention from the message content"""
-        bot_username = self.bot_handler.user_email.split('@')[0]
+        bot_username = self.config.email.split('@')[0]
         pattern = f"@\\*\\*{bot_username}\\*\\*"
         return re.sub(pattern, '', message['content']).strip()
 
