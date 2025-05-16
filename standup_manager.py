@@ -54,7 +54,7 @@ class StandupManager:
         with self.storage.use_storage(['standups']) as cache:
             standups = cache.get('standups') or {}
             standups[standup_id] = standup
-            cache.put('standups', standups)
+            cache['standups'] = standups
 
         return standup_id
 
@@ -95,7 +95,7 @@ class StandupManager:
             }
 
             # Update standups
-            cache.put('standups', standups)
+            cache['standups'] = standups
             return True
 
     def cancel_standup(self, standup_id: int) -> bool:
@@ -106,5 +106,5 @@ class StandupManager:
                 return False
 
             standups[str(standup_id)]['active'] = False
-            cache.put('standups', standups)
+            cache['standups'] = standups
             return True

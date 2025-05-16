@@ -12,3 +12,4 @@ wheels/
 !.junie/guidelines.md
 .idea
 .env
+/codebase.md
