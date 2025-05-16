@@ -23,7 +23,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: protomated/standup-bot
+          images: protomated/zulip-standup-bot
           tags: |
             type=semver,pattern={{version}}
             type=ref,event=branch

@@ -11,3 +11,4 @@ wheels/
 .junie
 !.junie/guidelines.md
 .idea
+.env

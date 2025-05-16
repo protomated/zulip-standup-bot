@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  standup-bot:
+  zulip-standup-bot:
     build: .
     volumes:
       - .:/app
