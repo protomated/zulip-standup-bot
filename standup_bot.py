@@ -17,6 +17,7 @@ from report_generator import ReportGenerator
 from templates import Templates
 from config import Config
 from setup_wizard import SetupWizard
+from response_collector import ResponseCollector
 
 
 class StandupBotHandler:
@@ -72,6 +73,7 @@ Type `help` for more detailed information.
         self.report_generator = ReportGenerator(self.storage_manager, self.ai_summary)
         self.templates = Templates()
         self.setup_wizard = SetupWizard(bot_handler, self.standup_manager, self.templates)
+        self.response_collector = ResponseCollector(bot_handler, self.standup_manager, self.storage_manager)
 
         # Initialize the scheduled tasks if any
         self.schedule_manager.initialize_scheduled_tasks()
@@ -474,14 +476,8 @@ Type `help` for more detailed information.
 
         # If this is just a status command without content, prompt for responses
         if len(parts) <= 2 or (len(parts) == 2 and standup_id == int(parts[1])):
-            # Send questions and instructions
-            response = f"# Status Update for {standup['name']}\n\n"
-            response += "Please answer the following questions:\n\n"
-
-            for i, question in enumerate(standup['questions'], 1):
-                response += f"{i}. {question}\n"
-
-            response += "\nReply with your answers, one per line."
+            # Use the response collector to format questions
+            response = self.response_collector.format_questions(standup_id)
             self.bot_handler.send_reply(message, response)
             return
 
@@ -493,24 +489,12 @@ Type `help` for more detailed information.
         content_start = content.find(' ', content.find(' ') + 1) + 1 if standup_id == int(parts[1]) else content.find(' ') + 1
         answers_text = content[content_start:].strip()
 
-        # Split answers by line
-        answer_lines = answers_text.split('\n')
+        # Use the response collector to validate and save responses
+        success, response_message = self.response_collector.collect_and_validate_responses(
+            standup_id, sender_id, answers_text
+        )
 
-        # Match answers to questions
-        responses = {}
-        for i, question in enumerate(standup['questions']):
-            if i < len(answer_lines):
-                responses[question] = answer_lines[i]
-            else:
-                responses[question] = "No response"
-
-        # Save the responses
-        if self.standup_manager.add_response(standup_id, sender_id, responses):
-            self.bot_handler.send_reply(message,
-                f"Status update submitted for {standup['name']}. Thank you!")
-        else:
-            self.bot_handler.send_reply(message,
-                "Failed to submit status update. Please try again.")
+        self.bot_handler.send_reply(message, response_message)
 
     def _is_bot_mentioned(self, message: Dict[str, Any]) -> bool:
         """Check if the bot is mentioned in a message"""

@@ -19,7 +19,8 @@ class StandupManager:
                        schedule: Dict[str, Any], questions: List[str],
                        participants: List[int], timezone_handling: str = "same",
                        team_tag: str = "", project_tag: str = "",
-                       permissions: Dict[str, Any] = None) -> int:
+                       permissions: Dict[str, Any] = None,
+                       question_templates: Optional[List[Dict[str, Any]]] = None) -> int:
         """
         Create a new standup meeting
 
@@ -34,6 +35,7 @@ class StandupManager:
             team_tag: Optional team tag for categorizing standups
             project_tag: Optional project tag for categorizing standups
             permissions: Optional permissions settings for the standup
+            question_templates: Optional structured question templates with validation rules
 
         Returns:
             Standup ID
@@ -68,7 +70,8 @@ class StandupManager:
             'active': True,
             'created_at': datetime.datetime.now().isoformat(),
             'responses': {},
-            'history': []
+            'history': [],
+            'question_templates': question_templates or []
         }
 
         # Store the standup

@@ -5,6 +5,7 @@ from zulip_bots.lib import BotHandler
 
 from standup_manager import StandupManager
 from templates import Templates
+from response_collector import ResponseCollector, QuestionTemplate, ResponseType
 
 
 class SetupWizard:
@@ -195,8 +196,20 @@ class SetupWizard:
             if not questions:
                 questions = self.templates.default_questions()
 
-        # Store questions and move to next step
+        # Create question templates
+        question_templates = []
+        for question in questions:
+            # Create a default text question template
+            template = QuestionTemplate(
+                question=question,
+                response_type=ResponseType.TEXT,
+                required=True
+            )
+            question_templates.append(template.to_dict())
+
+        # Store questions and question templates and move to next step
         self.setup_states[user_id]['questions'] = questions
+        self.setup_states[user_id]['question_templates'] = question_templates
         self.setup_states[user_id]['step'] = 'participants'
 
         # Send next prompt
@@ -292,7 +305,8 @@ class SetupWizard:
                     timezone_handling=self.setup_states[user_id]['timezone_handling'],
                     team_tag=self.setup_states[user_id]['team_tag'],
                     project_tag=self.setup_states[user_id]['project_tag'],
-                    permissions=self.setup_states[user_id]['permissions']
+                    permissions=self.setup_states[user_id]['permissions'],
+                    question_templates=self.setup_states[user_id].get('question_templates', [])
                 )
 
                 # Send success message
