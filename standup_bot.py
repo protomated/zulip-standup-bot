@@ -149,7 +149,45 @@ Type `help` for more detailed information.
         self.setup_wizard.start_setup(sender_id)
 
     # More command handlers and helper methods
-    # ...
+    def _handle_list_command(self, message: Dict[str, Any]) -> None:
+        """
+        Handle the list command to display all standups the user is part of
+        """
+        sender_id = message['sender_id']
+
+        # Get all standups for the user
+        standups = self.standup_manager.get_standups_for_user(sender_id)
+
+        if not standups:
+            self.bot_handler.send_reply(message,
+                "You're not part of any standups yet. Type `setup` to create your first standup.")
+            return
+
+        # Format the standups into a readable message
+        response = "# Your Standups\n\n"
+
+        for standup in standups:
+            # Format schedule days
+            days_map = {
+                "monday": "Mon", "tuesday": "Tue", "wednesday": "Wed",
+                "thursday": "Thu", "friday": "Fri", "saturday": "Sat", "sunday": "Sun"
+            }
+            days = [days_map.get(day, day) for day in standup['schedule']['days']]
+            days_str = ", ".join(days)
+
+            # Format active status
+            status = "Active" if standup['active'] else "Inactive"
+
+            # Add standup to the response
+            response += f"## {standup['name']} (ID: {standup['id']})\n"
+            response += f"**Status:** {status}\n"
+            response += f"**Schedule:** {days_str} at {standup['schedule']['time']}\n"
+            response += f"**Stream:** #{standup['team_stream']}\n"
+            response += f"**Participants:** {len(standup['participants'])} members\n\n"
+
+        response += "Use `status [standup_id]` to submit your status for a specific standup."
+
+        self.bot_handler.send_reply(message, response)
 
     def _is_bot_mentioned(self, message: Dict[str, Any]) -> bool:
         """Check if the bot is mentioned in a message"""
