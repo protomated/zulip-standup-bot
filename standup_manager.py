@@ -17,7 +17,9 @@ class StandupManager:
 
     def create_standup(self, creator_id: int, name: str, team_stream: str,
                        schedule: Dict[str, Any], questions: List[str],
-                       participants: List[int], timezone_handling: str = "same") -> int:
+                       participants: List[int], timezone_handling: str = "same",
+                       team_tag: str = "", project_tag: str = "",
+                       permissions: Dict[str, Any] = None) -> int:
         """
         Create a new standup meeting
 
@@ -29,11 +31,22 @@ class StandupManager:
             questions: List of questions to ask in the standup
             participants: List of participant user IDs
             timezone_handling: How to handle timezones ("same" or "local")
+            team_tag: Optional team tag for categorizing standups
+            project_tag: Optional project tag for categorizing standups
+            permissions: Optional permissions settings for the standup
 
         Returns:
             Standup ID
         """
         standup_id = int(time.time())  # Simple unique ID generation
+
+        # Default permissions if none provided
+        if permissions is None:
+            permissions = {
+                'admin_users': [creator_id],  # Creator is admin by default
+                'can_edit': 'admin',  # Only admins can edit
+                'can_view': 'participants'  # Only participants can view
+            }
 
         standup = {
             'id': standup_id,
@@ -44,6 +57,14 @@ class StandupManager:
             'questions': questions,
             'participants': participants,
             'timezone_handling': timezone_handling,
+            'team_tag': team_tag,
+            'project_tag': project_tag,
+            'permissions': permissions,
+            'settings': {
+                'reminder_time': 30,  # Minutes before standup to send reminder
+                'report_format': 'detailed',  # Default report format
+                'ai_summary': True  # Enable AI summary by default
+            },
             'active': True,
             'created_at': datetime.datetime.now().isoformat(),
             'responses': {},
@@ -106,5 +127,197 @@ class StandupManager:
                 return False
 
             standups[str(standup_id)]['active'] = False
+            cache['standups'] = standups
+            return True
+
+    def has_permission(self, standup_id: int, user_id: int, permission_type: str) -> bool:
+        """
+        Check if a user has a specific permission for a standup
+
+        Args:
+            standup_id: ID of the standup
+            user_id: ID of the user
+            permission_type: Type of permission ('view', 'edit', 'admin')
+
+        Returns:
+            True if user has permission, False otherwise
+        """
+        standup = self.get_standup(standup_id)
+        if not standup:
+            return False
+
+        # Creator always has all permissions
+        if user_id == standup.get('creator_id'):
+            return True
+
+        # Check if user is an admin
+        if permission_type == 'admin':
+            return user_id in standup.get('permissions', {}).get('admin_users', [])
+
+        # Check edit permission
+        if permission_type == 'edit':
+            edit_permission = standup.get('permissions', {}).get('can_edit', 'admin')
+            if edit_permission == 'admin':
+                return user_id in standup.get('permissions', {}).get('admin_users', [])
+            elif edit_permission == 'participants':
+                return user_id in standup.get('participants', [])
+            elif edit_permission == 'all':
+                return True
+
+        # Check view permission
+        if permission_type == 'view':
+            view_permission = standup.get('permissions', {}).get('can_view', 'participants')
+            if view_permission == 'admin':
+                return user_id in standup.get('permissions', {}).get('admin_users', [])
+            elif view_permission == 'participants':
+                return user_id in standup.get('participants', [])
+            elif view_permission == 'all':
+                return True
+
+        return False
+
+    def add_admin(self, standup_id: int, admin_id: int, requester_id: int) -> bool:
+        """
+        Add an admin to a standup
+
+        Args:
+            standup_id: ID of the standup
+            admin_id: ID of the user to add as admin
+            requester_id: ID of the user making the request
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Check if requester has admin permission
+        if not self.has_permission(standup_id, requester_id, 'admin'):
+            return False
+
+        with self.storage.use_storage(['standups']) as cache:
+            standups = cache.get('standups') or {}
+            if str(standup_id) not in standups:
+                return False
+
+            standup = standups[str(standup_id)]
+            if 'permissions' not in standup:
+                standup['permissions'] = {
+                    'admin_users': [standup['creator_id']],
+                    'can_edit': 'admin',
+                    'can_view': 'participants'
+                }
+
+            if admin_id not in standup['permissions']['admin_users']:
+                standup['permissions']['admin_users'].append(admin_id)
+
+            cache['standups'] = standups
+            return True
+
+    def remove_admin(self, standup_id: int, admin_id: int, requester_id: int) -> bool:
+        """
+        Remove an admin from a standup
+
+        Args:
+            standup_id: ID of the standup
+            admin_id: ID of the user to remove as admin
+            requester_id: ID of the user making the request
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Check if requester has admin permission
+        if not self.has_permission(standup_id, requester_id, 'admin'):
+            return False
+
+        # Cannot remove creator as admin
+        standup = self.get_standup(standup_id)
+        if not standup or admin_id == standup.get('creator_id'):
+            return False
+
+        with self.storage.use_storage(['standups']) as cache:
+            standups = cache.get('standups') or {}
+            if str(standup_id) not in standups:
+                return False
+
+            standup = standups[str(standup_id)]
+            if 'permissions' not in standup or 'admin_users' not in standup['permissions']:
+                return False
+
+            if admin_id in standup['permissions']['admin_users']:
+                standup['permissions']['admin_users'].remove(admin_id)
+
+            cache['standups'] = standups
+            return True
+
+    def update_settings(self, standup_id: int, settings: Dict[str, Any], requester_id: int) -> bool:
+        """
+        Update settings for a standup
+
+        Args:
+            standup_id: ID of the standup
+            settings: Dictionary of settings to update
+            requester_id: ID of the user making the request
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Check if requester has edit permission
+        if not self.has_permission(standup_id, requester_id, 'edit'):
+            return False
+
+        with self.storage.use_storage(['standups']) as cache:
+            standups = cache.get('standups') or {}
+            if str(standup_id) not in standups:
+                return False
+
+            standup = standups[str(standup_id)]
+            if 'settings' not in standup:
+                standup['settings'] = {
+                    'reminder_time': 30,
+                    'report_format': 'detailed',
+                    'ai_summary': True
+                }
+
+            # Update settings
+            for key, value in settings.items():
+                standup['settings'][key] = value
+
+            cache['standups'] = standups
+            return True
+
+    def update_permissions(self, standup_id: int, permissions: Dict[str, Any], requester_id: int) -> bool:
+        """
+        Update permissions for a standup
+
+        Args:
+            standup_id: ID of the standup
+            permissions: Dictionary of permissions to update
+            requester_id: ID of the user making the request
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Check if requester has admin permission
+        if not self.has_permission(standup_id, requester_id, 'admin'):
+            return False
+
+        with self.storage.use_storage(['standups']) as cache:
+            standups = cache.get('standups') or {}
+            if str(standup_id) not in standups:
+                return False
+
+            standup = standups[str(standup_id)]
+            if 'permissions' not in standup:
+                standup['permissions'] = {
+                    'admin_users': [standup['creator_id']],
+                    'can_edit': 'admin',
+                    'can_view': 'participants'
+                }
+
+            # Update permissions
+            for key, value in permissions.items():
+                # Don't allow removing creator from admin_users
+                if key == 'admin_users' and standup['creator_id'] not in value:
+                    value.append(standup['creator_id'])
+                standup['permissions'][key] = value
+
             cache['standups'] = standups
             return True

@@ -32,7 +32,19 @@ class SetupWizard:
             'time': '',
             'questions': [],
             'participants': [],
-            'timezone_handling': 'same'  # Default to same timezone
+            'timezone_handling': 'same',  # Default to same timezone
+            'team_tag': '',
+            'project_tag': '',
+            'permissions': {
+                'admin_users': [user_id],  # Creator is admin by default
+                'can_edit': 'admin',  # Only admins can edit
+                'can_view': 'participants'  # Only participants can view
+            },
+            'settings': {
+                'reminder_time': 30,  # Minutes before standup to send reminder
+                'report_format': 'detailed',  # Default report format
+                'ai_summary': True  # Enable AI summary by default
+            }
         }
 
         # Send intro message
@@ -72,6 +84,10 @@ class SetupWizard:
             return self._handle_questions_response(user_id, message_content)
         elif current_step == 'participants':
             return self._handle_participants_response(user_id, message_content)
+        elif current_step == 'team_tag':
+            return self._handle_team_tag_response(user_id, message_content)
+        elif current_step == 'project_tag':
+            return self._handle_project_tag_response(user_id, message_content)
         elif current_step == 'confirmation':
             return self._handle_confirmation_response(user_id, message_content)
 
@@ -192,6 +208,30 @@ class SetupWizard:
         # Store participants as a string for now (will be processed when creating the standup)
         self.setup_states[user_id]['participants_raw'] = message_content.strip()
 
+        # Move to team tag step
+        self.setup_states[user_id]['step'] = 'team_tag'
+
+        # Send team tag prompt
+        self._send_message(user_id, "What team does this standup belong to? (optional, press Enter to skip)")
+        return False
+
+    def _handle_team_tag_response(self, user_id: int, message_content: str) -> bool:
+        """Handle response for team tag"""
+        # Store team tag
+        self.setup_states[user_id]['team_tag'] = message_content.strip()
+
+        # Move to project tag step
+        self.setup_states[user_id]['step'] = 'project_tag'
+
+        # Send project tag prompt
+        self._send_message(user_id, "What project does this standup belong to? (optional, press Enter to skip)")
+        return False
+
+    def _handle_project_tag_response(self, user_id: int, message_content: str) -> bool:
+        """Handle response for project tag"""
+        # Store project tag
+        self.setup_states[user_id]['project_tag'] = message_content.strip()
+
         # Move to confirmation step
         self.setup_states[user_id]['step'] = 'confirmation'
 
@@ -202,15 +242,24 @@ class SetupWizard:
         }
         days_formatted = ', '.join([day_names[day] for day in self.setup_states[user_id]['days']])
 
-        # Send confirmation message
-        self._send_message(user_id, self.templates.setup_confirmation(
+        # Prepare team and project tag display
+        team_tag_display = f"Team: {self.setup_states[user_id]['team_tag']}" if self.setup_states[user_id]['team_tag'] else "Team: None"
+        project_tag_display = f"Project: {self.setup_states[user_id]['project_tag']}" if self.setup_states[user_id]['project_tag'] else "Project: None"
+
+        # Send confirmation message with tags
+        confirmation_message = self.templates.setup_confirmation(
             name=self.setup_states[user_id]['name'],
             stream=self.setup_states[user_id]['stream'],
             days=days_formatted,
             time=self.setup_states[user_id]['time'],
             questions=self.setup_states[user_id]['questions'],
             participants=self.setup_states[user_id]['participants_raw']
-        ))
+        )
+
+        # Add tags to confirmation message
+        confirmation_message += f"\n\n{team_tag_display}\n{project_tag_display}"
+
+        self._send_message(user_id, confirmation_message)
         return False
 
     def _handle_confirmation_response(self, user_id: int, message_content: str) -> bool:
@@ -240,7 +289,10 @@ class SetupWizard:
                     schedule=schedule,
                     questions=self.setup_states[user_id]['questions'],
                     participants=participants,
-                    timezone_handling=self.setup_states[user_id]['timezone_handling']
+                    timezone_handling=self.setup_states[user_id]['timezone_handling'],
+                    team_tag=self.setup_states[user_id]['team_tag'],
+                    project_tag=self.setup_states[user_id]['project_tag'],
+                    permissions=self.setup_states[user_id]['permissions']
                 )
 
                 # Send success message

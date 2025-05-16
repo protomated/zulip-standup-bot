@@ -38,8 +38,14 @@ Type `setup` to create your first standup meeting in under 60 seconds.
 * `help` - Show detailed help
 * `setup` - Set up a new standup meeting
 * `list` - List all standups you're part of
+* `switch [standup_id]` - Set your active standup
 * `status [standup_id]` - Submit your status
 * `report [standup_id]` - Generate a report
+
+## Multiple Standups
+* Filter standups with `list team:TEAM` or `list project:PROJECT`
+* Use `status` without an ID to submit for your active standup
+* Manage permissions with `permissions [standup_id] [action]`
 
 Type `help` for more detailed information.
 '''
@@ -104,6 +110,8 @@ Type `help` for more detailed information.
             self._handle_setup_command(message)
         elif content.startswith('list'):
             self._handle_list_command(message)
+        elif content.startswith('switch'):
+            self._handle_switch_command(message)
         elif content.startswith('status'):
             self._handle_status_command(message)
         elif content.startswith('remind'):
@@ -114,6 +122,8 @@ Type `help` for more detailed information.
             self._handle_cancel_command(message)
         elif content.startswith('settings'):
             self._handle_settings_command(message)
+        elif content.startswith('permissions'):
+            self._handle_permissions_command(message)
         elif content.startswith('help'):
             self.bot_handler.send_reply(message, self.templates.help_message())
         else:
@@ -150,6 +160,21 @@ Type `help` for more detailed information.
         Handle the list command to display all standups the user is part of
         """
         sender_id = message['sender_id']
+        content = message['content'].strip()
+
+        # Parse command for filters
+        team_filter = None
+        project_filter = None
+
+        # Check for team filter
+        team_match = re.search(r'team:(\S+)', content)
+        if team_match:
+            team_filter = team_match.group(1)
+
+        # Check for project filter
+        project_match = re.search(r'project:(\S+)', content)
+        if project_match:
+            project_filter = project_match.group(1)
 
         # Get all standups for the user
         standups = self.standup_manager.get_standups_for_user(sender_id)
@@ -159,8 +184,29 @@ Type `help` for more detailed information.
                 "You're not part of any standups yet. Type `setup` to create your first standup.")
             return
 
+        # Apply filters if specified
+        if team_filter:
+            standups = [s for s in standups if s.get('team_tag', '').lower() == team_filter.lower()]
+
+        if project_filter:
+            standups = [s for s in standups if s.get('project_tag', '').lower() == project_filter.lower()]
+
+        if team_filter or project_filter:
+            if not standups:
+                filter_desc = []
+                if team_filter:
+                    filter_desc.append(f"team '{team_filter}'")
+                if project_filter:
+                    filter_desc.append(f"project '{project_filter}'")
+                filter_str = " and ".join(filter_desc)
+                self.bot_handler.send_reply(message, f"No standups found matching {filter_str}.")
+                return
+
         # Format the standups into a readable message
         response = "# Your Standups\n\n"
+
+        # Get user's active standup if any
+        active_standup_id = self._get_user_active_standup(sender_id)
 
         for standup in standups:
             # Format schedule days
@@ -174,16 +220,297 @@ Type `help` for more detailed information.
             # Format active status
             status = "Active" if standup['active'] else "Inactive"
 
+            # Mark current active standup
+            current_marker = " ✓" if str(standup['id']) == str(active_standup_id) else ""
+
             # Add standup to the response
-            response += f"## {standup['name']} (ID: {standup['id']})\n"
+            response += f"## {standup['name']} (ID: {standup['id']}){current_marker}\n"
             response += f"**Status:** {status}\n"
             response += f"**Schedule:** {days_str} at {standup['schedule']['time']}\n"
             response += f"**Stream:** #{standup['team_stream']}\n"
+
+            # Add team and project tags if present
+            if standup.get('team_tag'):
+                response += f"**Team:** {standup['team_tag']}\n"
+            if standup.get('project_tag'):
+                response += f"**Project:** {standup['project_tag']}\n"
+
             response += f"**Participants:** {len(standup['participants'])} members\n\n"
 
-        response += "Use `status [standup_id]` to submit your status for a specific standup."
+        response += "Use `switch [standup_id]` to set your active standup.\n"
+        response += "Use `status` to submit your status for your active standup, or `status [standup_id]` for a specific standup.\n"
+        response += "Filter standups with `list team:TEAM` or `list project:PROJECT`."
 
         self.bot_handler.send_reply(message, response)
+
+    def _handle_switch_command(self, message: Dict[str, Any]) -> None:
+        """
+        Handle the switch command to set the active standup for a user
+        """
+        sender_id = message['sender_id']
+        content = message['content'].strip()
+
+        # Parse standup ID from command
+        parts = content.split()
+        if len(parts) < 2:
+            self.bot_handler.send_reply(message,
+                "Please specify a standup ID. Usage: `switch [standup_id]`")
+            return
+
+        try:
+            standup_id = int(parts[1])
+        except ValueError:
+            self.bot_handler.send_reply(message,
+                "Invalid standup ID. Please provide a numeric ID.")
+            return
+
+        # Check if standup exists and user has access
+        standup = self.standup_manager.get_standup(standup_id)
+        if not standup:
+            self.bot_handler.send_reply(message,
+                f"Standup with ID {standup_id} not found.")
+            return
+
+        # Check if user has permission to view this standup
+        if not self.standup_manager.has_permission(standup_id, sender_id, 'view'):
+            self.bot_handler.send_reply(message,
+                f"You don't have permission to access standup {standup_id}.")
+            return
+
+        # Set as active standup for the user
+        self._set_user_active_standup(sender_id, standup_id)
+
+        self.bot_handler.send_reply(message,
+            f"Switched to standup: **{standup['name']}**. You can now use `status` without specifying an ID.")
+
+    def _handle_permissions_command(self, message: Dict[str, Any]) -> None:
+        """
+        Handle the permissions command to manage standup permissions
+        """
+        sender_id = message['sender_id']
+        content = message['content'].strip()
+
+        # Parse command
+        parts = content.split()
+        if len(parts) < 3:
+            self.bot_handler.send_reply(message,
+                "Usage: `permissions [standup_id] [action] [parameters]`\n\n" +
+                "Actions:\n" +
+                "- `add-admin @user` - Add a user as admin\n" +
+                "- `remove-admin @user` - Remove a user as admin\n" +
+                "- `set-edit [admin|participants|all]` - Set who can edit\n" +
+                "- `set-view [admin|participants|all]` - Set who can view")
+            return
+
+        try:
+            standup_id = int(parts[1])
+            action = parts[2]
+        except (ValueError, IndexError):
+            self.bot_handler.send_reply(message,
+                "Invalid command format. Please provide a numeric standup ID and an action.")
+            return
+
+        # Check if standup exists
+        standup = self.standup_manager.get_standup(standup_id)
+        if not standup:
+            self.bot_handler.send_reply(message,
+                f"Standup with ID {standup_id} not found.")
+            return
+
+        # Check if user has admin permission
+        if not self.standup_manager.has_permission(standup_id, sender_id, 'admin'):
+            self.bot_handler.send_reply(message,
+                f"You don't have admin permission for standup {standup_id}.")
+            return
+
+        # Handle different actions
+        if action == 'add-admin' and len(parts) >= 4:
+            # Extract user from mention
+            user_mention = ' '.join(parts[3:])
+            user_id = self._extract_user_id_from_mention(user_mention)
+
+            if not user_id:
+                self.bot_handler.send_reply(message,
+                    "Invalid user mention. Please use the format `@user`.")
+                return
+
+            if self.standup_manager.add_admin(standup_id, user_id, sender_id):
+                self.bot_handler.send_reply(message,
+                    f"Added user as admin for standup {standup_id}.")
+            else:
+                self.bot_handler.send_reply(message,
+                    f"Failed to add user as admin.")
+
+        elif action == 'remove-admin' and len(parts) >= 4:
+            # Extract user from mention
+            user_mention = ' '.join(parts[3:])
+            user_id = self._extract_user_id_from_mention(user_mention)
+
+            if not user_id:
+                self.bot_handler.send_reply(message,
+                    "Invalid user mention. Please use the format `@user`.")
+                return
+
+            if self.standup_manager.remove_admin(standup_id, user_id, sender_id):
+                self.bot_handler.send_reply(message,
+                    f"Removed user as admin for standup {standup_id}.")
+            else:
+                self.bot_handler.send_reply(message,
+                    f"Failed to remove user as admin. Note: The creator cannot be removed as admin.")
+
+        elif action == 'set-edit' and len(parts) >= 4:
+            permission = parts[3]
+            if permission not in ['admin', 'participants', 'all']:
+                self.bot_handler.send_reply(message,
+                    "Invalid permission value. Use 'admin', 'participants', or 'all'.")
+                return
+
+            if self.standup_manager.update_permissions(standup_id, {'can_edit': permission}, sender_id):
+                self.bot_handler.send_reply(message,
+                    f"Updated edit permissions for standup {standup_id} to '{permission}'.")
+            else:
+                self.bot_handler.send_reply(message,
+                    f"Failed to update permissions.")
+
+        elif action == 'set-view' and len(parts) >= 4:
+            permission = parts[3]
+            if permission not in ['admin', 'participants', 'all']:
+                self.bot_handler.send_reply(message,
+                    "Invalid permission value. Use 'admin', 'participants', or 'all'.")
+                return
+
+            if self.standup_manager.update_permissions(standup_id, {'can_view': permission}, sender_id):
+                self.bot_handler.send_reply(message,
+                    f"Updated view permissions for standup {standup_id} to '{permission}'.")
+            else:
+                self.bot_handler.send_reply(message,
+                    f"Failed to update permissions.")
+
+        else:
+            self.bot_handler.send_reply(message,
+                "Invalid action or missing parameters. Type `permissions` for usage help.")
+
+    def _get_user_active_standup(self, user_id: int) -> Optional[int]:
+        """Get the active standup ID for a user"""
+        with self.bot_handler.storage.use_storage(['user_preferences']) as cache:
+            preferences = cache.get('user_preferences') or {}
+            user_prefs = preferences.get(str(user_id), {})
+            return user_prefs.get('active_standup')
+
+    def _set_user_active_standup(self, user_id: int, standup_id: int) -> None:
+        """Set the active standup ID for a user"""
+        with self.bot_handler.storage.use_storage(['user_preferences']) as cache:
+            preferences = cache.get('user_preferences') or {}
+            user_prefs = preferences.get(str(user_id), {})
+            user_prefs['active_standup'] = standup_id
+            preferences[str(user_id)] = user_prefs
+            cache['user_preferences'] = preferences
+
+    def _extract_user_id_from_mention(self, mention: str) -> Optional[int]:
+        """Extract user ID from a mention string"""
+        # In a real implementation, you would use the Zulip API to resolve user names to IDs
+        # For now, we'll use a placeholder mapping
+        mention_pattern = r'@\*\*([^*]+)\*\*'
+        match = re.search(mention_pattern, mention)
+
+        if not match:
+            return None
+
+        user_name = match.group(1)
+        user_mapping = {
+            'Alice': 101,
+            'Bob': 102,
+            'Charlie': 103,
+            # Add more mappings as needed
+        }
+
+        return user_mapping.get(user_name)
+
+    def _handle_status_command(self, message: Dict[str, Any]) -> None:
+        """
+        Handle the status command to submit a status update for a standup
+        """
+        sender_id = message['sender_id']
+        content = message['content'].strip()
+
+        # Parse standup ID from command if provided
+        standup_id = None
+        parts = content.split()
+
+        if len(parts) >= 2:
+            try:
+                standup_id = int(parts[1])
+            except ValueError:
+                # Not a numeric ID, might be the start of a status update
+                pass
+
+        # If no standup ID provided, use the active standup
+        if standup_id is None:
+            standup_id = self._get_user_active_standup(sender_id)
+
+            if standup_id is None:
+                self.bot_handler.send_reply(message,
+                    "No active standup set. Please specify a standup ID or use `switch [standup_id]` to set an active standup.")
+                return
+
+        # Check if standup exists
+        standup = self.standup_manager.get_standup(standup_id)
+        if not standup:
+            self.bot_handler.send_reply(message,
+                f"Standup with ID {standup_id} not found.")
+            return
+
+        # Check if user has permission to submit status
+        if not self.standup_manager.has_permission(standup_id, sender_id, 'view'):
+            self.bot_handler.send_reply(message,
+                f"You don't have permission to access standup {standup_id}.")
+            return
+
+        # Check if user is a participant
+        if sender_id not in standup.get('participants', []) and sender_id != standup.get('creator_id'):
+            self.bot_handler.send_reply(message,
+                f"You are not a participant in standup {standup_id}.")
+            return
+
+        # If this is just a status command without content, prompt for responses
+        if len(parts) <= 2 or (len(parts) == 2 and standup_id == int(parts[1])):
+            # Send questions and instructions
+            response = f"# Status Update for {standup['name']}\n\n"
+            response += "Please answer the following questions:\n\n"
+
+            for i, question in enumerate(standup['questions'], 1):
+                response += f"{i}. {question}\n"
+
+            response += "\nReply with your answers, one per line."
+            self.bot_handler.send_reply(message, response)
+            return
+
+        # Process status update
+        # If we get here, the user has provided answers in the command
+        # Extract the answers from the message content
+
+        # Skip the command and standup ID if present
+        content_start = content.find(' ', content.find(' ') + 1) + 1 if standup_id == int(parts[1]) else content.find(' ') + 1
+        answers_text = content[content_start:].strip()
+
+        # Split answers by line
+        answer_lines = answers_text.split('\n')
+
+        # Match answers to questions
+        responses = {}
+        for i, question in enumerate(standup['questions']):
+            if i < len(answer_lines):
+                responses[question] = answer_lines[i]
+            else:
+                responses[question] = "No response"
+
+        # Save the responses
+        if self.standup_manager.add_response(standup_id, sender_id, responses):
+            self.bot_handler.send_reply(message,
+                f"Status update submitted for {standup['name']}. Thank you!")
+        else:
+            self.bot_handler.send_reply(message,
+                "Failed to submit status update. Please try again.")
 
     def _is_bot_mentioned(self, message: Dict[str, Any]) -> bool:
         """Check if the bot is mentioned in a message"""

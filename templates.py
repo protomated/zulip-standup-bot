@@ -2,7 +2,7 @@ class Templates:
     """
     Contains templates for various messages sent by the bot
     """
-    
+
     def welcome_message(self) -> str:
         """Welcome message when the bot is first added"""
         return """
@@ -93,11 +93,11 @@ Example: `@alice, @bob, @charlie`
 Or type `all` to include everyone in the stream.
 """
 
-    def setup_confirmation(self, name: str, stream: str, days: str, time: str, 
+    def setup_confirmation(self, name: str, stream: str, days: str, time: str,
                           questions: list, participants: str) -> str:
         """Confirmation message with standup details"""
         questions_formatted = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
-        
+
         return f"""
 # Standup Configuration Summary
 
@@ -151,11 +151,27 @@ Thank you for using StandupBot!
 - `help` - Show this help message
 - `setup` - Set up a new standup meeting
 - `list` - List all standups you're part of
+- `switch [standup_id]` - Set your active standup
 - `status [standup_id]` - Submit your status for a standup
 - `remind [standup_id]` - Send reminders to users who haven't submitted their status
 - `report [standup_id] [date]` - Generate a report for a standup
 - `cancel [standup_id]` - Cancel a standup meeting
 - `settings [standup_id]` - Change settings for a standup
+- `permissions [standup_id] [action] [parameters]` - Manage standup permissions
+
+## Multiple Standups
+You can be part of multiple standups for different teams or projects:
+- Use `list` to see all your standups
+- Filter standups with `list team:TEAM` or `list project:PROJECT`
+- Set your active standup with `switch [standup_id]`
+- Use `status` without an ID to submit for your active standup
+
+## Permissions Management
+Manage who can access and modify standups:
+- `permissions [standup_id] add-admin @user` - Add an admin
+- `permissions [standup_id] remove-admin @user` - Remove an admin
+- `permissions [standup_id] set-edit [admin|participants|all]` - Set who can edit
+- `permissions [standup_id] set-view [admin|participants|all]` - Set who can view
 
 ## Setup Process
 The `setup` command will guide you through creating a new standup with:
@@ -164,6 +180,7 @@ The `setup` command will guide you through creating a new standup with:
 3. Schedule (days and time)
 4. Questions to ask participants
 5. List of participants
+6. Team and project tags (optional)
 
 ## Submitting Status
 When it's time for a standup, I'll send you a direct message with questions.
@@ -171,6 +188,7 @@ You can also manually submit your status with:
 ```
 status [standup_id]
 ```
+Or just `status` if you have an active standup set.
 
 ## Need more help?
 Contact your administrator or visit our documentation.
