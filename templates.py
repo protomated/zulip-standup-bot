@@ -154,7 +154,8 @@ Thank you for using StandupBot!
 - `switch [standup_id]` - Set your active standup
 - `status [standup_id]` - Submit your status for a standup
 - `remind [standup_id]` - Send reminders to users who haven't submitted their status
-- `report [standup_id] [date]` - Generate a report for a standup
+- `report [standup_id] [date] [format] [email]` - Generate a report for a standup
+- `report settings` - Manage your report preferences
 - `cancel [standup_id]` - Cancel a standup meeting
 - `settings [standup_id]` - Change settings for a standup
 - `permissions [standup_id] [action] [parameters]` - Manage standup permissions
@@ -165,6 +166,26 @@ You can be part of multiple standups for different teams or projects:
 - Filter standups with `list team:TEAM` or `list project:PROJECT`
 - Set your active standup with `switch [standup_id]`
 - Use `status` without an ID to submit for your active standup
+
+## Report Generation
+Generate well-formatted reports for your standups:
+- `report [standup_id]` - Generate a report for today
+- `report [standup_id] YYYY-MM-DD` - Generate a report for a specific date
+- `report [standup_id] [date] [format]` - Generate a report in a specific format
+- `report [standup_id] [date] [format] [email]` - Send the report to an email address
+
+### Report Formats
+- `standard` - Basic report with participation stats and individual updates
+- `detailed` - Comprehensive report with more detailed information
+- `summary` - Concise report focusing on the AI summary
+- `compact` - Minimal report with just the essential information
+
+### Report Settings
+Customize your report preferences:
+- `report settings` - View your current report settings
+- `report settings format [standard|detailed|summary|compact]` - Set default format
+- `report settings email [on|off]` - Enable/disable automatic email reports
+- `report settings set-email [email]` - Set your default email address
 
 ## Permissions Management
 Manage who can access and modify standups:

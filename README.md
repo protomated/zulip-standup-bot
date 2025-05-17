@@ -87,7 +87,7 @@ If you prefer to run without Docker:
    ```bash
    # Using zuliprc file
    python run_bot.py --config-file zuliprc
-   
+
    # Using environment variables
    export ZULIP_EMAIL=your-bot@example.com
    export ZULIP_API_KEY=your_api_key
@@ -125,6 +125,48 @@ Once the bot is running, you can interact with it using the following commands:
 - `report` - Generate a report for a standup
 - `cancel` - Cancel a standup meeting
 - `settings` - Change settings for a standup
+- `timezone` - Set your timezone preference (e.g., `timezone America/New_York`)
+
+## Timezone Support
+
+The bot supports two modes of timezone handling for standup meetings:
+
+### Same Timezone for All Participants
+
+In this mode, all participants receive standup questions and submit their responses based on the same timezone. This is useful for teams that work in the same or similar timezones.
+
+### Local Timezone Adaptation
+
+In this mode, the bot adapts to each participant's local timezone. Participants receive standup questions at the scheduled time in their local timezone, allowing teams across different time zones to participate at a convenient time for them.
+
+### Setting Up Timezone Preferences
+
+1. When creating a new standup using the `setup` command, you'll be asked how timezones should be handled:
+   ```
+   How should timezones be handled?
+
+   1. Same timezone for all participants
+   2. Adapt to each participant's local timezone
+
+   Please enter 1 or 2:
+   ```
+
+2. After selecting the timezone handling mode, you'll be asked to specify the base timezone for the standup:
+   ```
+   What timezone should be used for the standup? (e.g., UTC, America/New_York)
+   ```
+
+3. Individual users can set their timezone preference using the `timezone` command:
+   ```
+   timezone America/Los_Angeles
+   ```
+
+### How It Works
+
+- In "same timezone" mode, all standup notifications are sent at the scheduled time in the specified timezone.
+- In "local timezone" mode, the bot converts the standup time to each participant's local timezone and sends notifications accordingly.
+- Standup reports include timezone information to provide context for the responses.
+- The standup remains open long enough to accommodate all participants' timezones, ensuring everyone has a chance to respond.
 
 ## Configuration
 

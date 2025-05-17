@@ -147,6 +147,56 @@ class StorageManager:
         from datetime import datetime
         return datetime.utcnow().isoformat() + 'Z'
 
+    def get_user_report_settings(self, user_id: int) -> Dict[str, Any]:
+        """
+        Get report settings for a user
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dictionary of report settings
+        """
+        with self.use_storage(['user_preferences']) as cache:
+            preferences = cache.get('user_preferences') or {}
+            user_prefs = preferences.get(str(user_id), {})
+            report_settings = user_prefs.get('report_settings', {})
+
+            # Set defaults if not present
+            if not report_settings:
+                report_settings = {
+                    'default_format': 'standard',
+                    'include_missing_participants': True,
+                    'email_reports': False,
+                    'default_email': None
+                }
+                user_prefs['report_settings'] = report_settings
+                preferences[str(user_id)] = user_prefs
+                cache.put('user_preferences', preferences)
+
+            return report_settings
+
+    def save_user_report_settings(self, user_id: int, settings: Dict[str, Any]) -> None:
+        """
+        Save report settings for a user
+
+        Args:
+            user_id: User ID
+            settings: Dictionary of report settings
+        """
+        with self.use_storage(['user_preferences']) as cache:
+            preferences = cache.get('user_preferences') or {}
+            user_prefs = preferences.get(str(user_id), {})
+
+            # Update report settings
+            report_settings = user_prefs.get('report_settings', {})
+            report_settings.update(settings)
+            user_prefs['report_settings'] = report_settings
+
+            preferences[str(user_id)] = user_prefs
+            cache.put('user_preferences', preferences)
+            self.logger.debug(f"Saved report settings for user {user_id}")
+
     @contextmanager
     def use_storage(self, keys: List[str]) -> ContextManager[Dict[str, Any]]:
         """

@@ -13,10 +13,11 @@ class SetupWizard:
     Handles the interactive setup flow for creating a new standup meeting
     """
 
-    def __init__(self, bot_handler: BotHandler, standup_manager: StandupManager, templates: Templates):
+    def __init__(self, bot_handler: BotHandler, standup_manager: StandupManager, templates: Templates, timezone_manager=None):
         self.bot_handler = bot_handler
         self.standup_manager = standup_manager
         self.templates = templates
+        self.timezone_manager = timezone_manager
         self.setup_states = {}  # Stores setup state for each user
         self.logger = logging.getLogger('standup_bot.setup_wizard')
 
@@ -85,6 +86,10 @@ class SetupWizard:
             return self._handle_questions_response(user_id, message_content)
         elif current_step == 'participants':
             return self._handle_participants_response(user_id, message_content)
+        elif current_step == 'timezone_handling':
+            return self._handle_timezone_handling_response(user_id, message_content)
+        elif current_step == 'timezone':
+            return self._handle_timezone_response(user_id, message_content)
         elif current_step == 'team_tag':
             return self._handle_team_tag_response(user_id, message_content)
         elif current_step == 'project_tag':
@@ -221,6 +226,57 @@ class SetupWizard:
         # Store participants as a string for now (will be processed when creating the standup)
         self.setup_states[user_id]['participants_raw'] = message_content.strip()
 
+        # Move to timezone handling step
+        self.setup_states[user_id]['step'] = 'timezone_handling'
+
+        # Send timezone handling prompt
+        self._send_message(user_id, "How should timezones be handled?\n\n1. Same timezone for all participants\n2. Adapt to each participant's local timezone\n\nPlease enter 1 or 2:")
+        return False
+
+    def _handle_timezone_handling_response(self, user_id: int, message_content: str) -> bool:
+        """Handle response for timezone handling"""
+        response = message_content.strip()
+
+        if response == '1':
+            # Same timezone for all participants
+            self.setup_states[user_id]['timezone_handling'] = 'same'
+            self.setup_states[user_id]['step'] = 'timezone'
+
+            # Get common timezones if timezone manager is available
+            timezone_options = ""
+            if self.timezone_manager:
+                common_timezones = self.timezone_manager.get_common_timezones()
+                # List some popular timezones as examples
+                popular_timezones = ['UTC', 'US/Eastern', 'US/Pacific', 'Europe/London', 'Asia/Tokyo']
+                timezone_options = "\n\nPopular options: " + ", ".join(popular_timezones)
+
+            self._send_message(user_id, f"What timezone should be used for the standup? (e.g., UTC, America/New_York){timezone_options}")
+        elif response == '2':
+            # Adapt to each participant's local timezone
+            self.setup_states[user_id]['timezone_handling'] = 'local'
+            self.setup_states[user_id]['step'] = 'timezone'
+
+            # Still need to set a base timezone for the standup
+            self._send_message(user_id, "What should be the base timezone for the standup? This will be used for scheduling and reporting. (e.g., UTC, America/New_York)")
+        else:
+            # Invalid response
+            self._send_message(user_id, "Invalid response. Please enter 1 for same timezone or 2 for local timezones.")
+            return False
+
+        return False
+
+    def _handle_timezone_response(self, user_id: int, message_content: str) -> bool:
+        """Handle response for timezone selection"""
+        timezone = message_content.strip()
+
+        # Validate timezone if timezone manager is available
+        if self.timezone_manager and timezone not in self.timezone_manager.get_all_timezones():
+            self._send_message(user_id, f"Invalid timezone: {timezone}. Please enter a valid timezone (e.g., UTC, America/New_York).")
+            return False
+
+        # Store timezone
+        self.setup_states[user_id]['timezone'] = timezone
+
         # Move to team tag step
         self.setup_states[user_id]['step'] = 'team_tag'
 
@@ -259,6 +315,11 @@ class SetupWizard:
         team_tag_display = f"Team: {self.setup_states[user_id]['team_tag']}" if self.setup_states[user_id]['team_tag'] else "Team: None"
         project_tag_display = f"Project: {self.setup_states[user_id]['project_tag']}" if self.setup_states[user_id]['project_tag'] else "Project: None"
 
+        # Prepare timezone display
+        timezone_handling = "Same timezone for all participants" if self.setup_states[user_id]['timezone_handling'] == 'same' else "Adapt to each participant's local timezone"
+        timezone = self.setup_states[user_id].get('timezone', 'UTC')
+        timezone_display = f"Timezone handling: {timezone_handling}\nBase timezone: {timezone}"
+
         # Send confirmation message with tags
         confirmation_message = self.templates.setup_confirmation(
             name=self.setup_states[user_id]['name'],
@@ -269,8 +330,8 @@ class SetupWizard:
             participants=self.setup_states[user_id]['participants_raw']
         )
 
-        # Add tags to confirmation message
-        confirmation_message += f"\n\n{team_tag_display}\n{project_tag_display}"
+        # Add tags and timezone info to confirmation message
+        confirmation_message += f"\n\n{team_tag_display}\n{project_tag_display}\n{timezone_display}"
 
         self._send_message(user_id, confirmation_message)
         return False
@@ -290,7 +351,7 @@ class SetupWizard:
                 schedule = {
                     'days': self.setup_states[user_id]['days'],
                     'time': self.setup_states[user_id]['time'],
-                    'timezone': 'UTC',  # Default timezone
+                    'timezone': self.setup_states[user_id].get('timezone', 'UTC'),  # Use selected timezone or default to UTC
                     'duration': 86400  # Default duration (24 hours)
                 }
 

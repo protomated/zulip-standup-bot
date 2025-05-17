@@ -18,6 +18,7 @@ from templates import Templates
 from config import Config
 from setup_wizard import SetupWizard
 from response_collector import ResponseCollector
+from email_service import EmailService
 
 
 class StandupBotHandler:
@@ -74,6 +75,13 @@ Type `help` for more detailed information.
         self.templates = Templates()
         self.setup_wizard = SetupWizard(bot_handler, self.standup_manager, self.templates)
         self.response_collector = ResponseCollector(bot_handler, self.standup_manager, self.storage_manager)
+
+        # Initialize email service if configured
+        self.email_service = EmailService(self.config) if self.config.is_email_configured() else None
+        if self.email_service:
+            self.logger.info("Email service initialized")
+        else:
+            self.logger.warning("Email service not configured - email functionality will be disabled")
 
         # Initialize the scheduled tasks if any
         self.schedule_manager.initialize_scheduled_tasks()
@@ -507,6 +515,200 @@ Type `help` for more detailed information.
         bot_username = self.config.email.split('@')[0]
         pattern = f"@\\*\\*{bot_username}\\*\\*"
         return re.sub(pattern, '', message['content']).strip()
+
+    def _handle_report_command(self, message: Dict[str, Any]) -> None:
+        """
+        Handle the report command to generate and send a standup report
+
+        Command format:
+        report [standup_id] [date] [format] [email]
+
+        - standup_id: ID of the standup (required)
+        - date: Date in YYYY-MM-DD format (optional, defaults to today)
+        - format: Report format (optional, defaults to user preference or 'standard')
+        - email: Email address to send report to (optional, defaults to user preference)
+        """
+        sender_id = message['sender_id']
+        content = message['content'].strip()
+
+        # Get user report settings
+        user_settings = self.storage_manager.get_user_report_settings(sender_id)
+
+        # Parse command arguments
+        parts = content.split()
+
+        # Check if this is a settings command
+        if len(parts) >= 2 and parts[1] == 'settings':
+            self._handle_report_settings_command(message, parts[2:] if len(parts) > 2 else [])
+            return
+
+        # Check if standup ID is provided
+        if len(parts) < 2:
+            self.bot_handler.send_reply(message,
+                "Please specify a standup ID. Usage: `report [standup_id] [date] [format] [email]`\n" +
+                "Or use `report settings` to manage your report preferences.")
+            return
+
+        try:
+            standup_id = int(parts[1])
+        except ValueError:
+            self.bot_handler.send_reply(message,
+                "Invalid standup ID. Please provide a numeric ID.")
+            return
+
+        # Check if standup exists
+        standup = self.standup_manager.get_standup(standup_id)
+        if not standup:
+            self.bot_handler.send_reply(message,
+                f"Standup with ID {standup_id} not found.")
+            return
+
+        # Check if user has permission to view this standup
+        if not self.standup_manager.has_permission(standup_id, sender_id, 'view'):
+            self.bot_handler.send_reply(message,
+                f"You don't have permission to access standup {standup_id}.")
+            return
+
+        # Parse date if provided
+        date = None
+        if len(parts) >= 3 and re.match(r'^\d{4}-\d{2}-\d{2}$', parts[2]):
+            date = parts[2]
+
+        # Parse format if provided, otherwise use user preference
+        report_format = user_settings.get('default_format', 'standard')
+        if len(parts) >= 4:
+            if parts[3] in ['standard', 'detailed', 'summary', 'compact']:
+                report_format = parts[3]
+
+        # Parse email if provided, otherwise use user preference if enabled
+        email = None
+        if len(parts) >= 5 and '@' in parts[4]:
+            email = parts[4]
+        elif user_settings.get('email_reports', False) and user_settings.get('default_email'):
+            email = user_settings.get('default_email')
+
+        # Generate the report
+        report = self.report_generator.generate_report(standup_id, date)
+
+        if "error" in report:
+            self.bot_handler.send_reply(message, f"Error generating report: {report['error']}")
+            return
+
+        # Format the report message based on the requested format
+        formatted_report = self.report_generator.format_report_message(report, report_format)
+
+        # Send the report to the user
+        self.bot_handler.send_reply(message, formatted_report)
+
+        # If email is provided or enabled in settings, send the report via email
+        if email:
+            if not self.email_service:
+                self.bot_handler.send_reply(message,
+                    "Email service is not configured. Please contact your administrator to enable email functionality.")
+                return
+
+            try:
+                # Generate a subject for the email
+                subject = f"Standup Report: {report['standup_name']} - {report['date']}"
+
+                # Send the email
+                success = self.email_service.send_report(
+                    to_email=email,
+                    report_markdown=formatted_report,
+                    subject=subject
+                )
+
+                if success:
+                    self.bot_handler.send_reply(message,
+                        f"Report has been sent to {email}.")
+                else:
+                    self.bot_handler.send_reply(message,
+                        f"Failed to send email to {email}. Please check the email address and try again.")
+            except Exception as e:
+                self.logger.error(f"Email error: {str(e)}")
+                self.bot_handler.send_reply(message,
+                    f"Failed to send email: {str(e)}")
+
+    def _handle_report_settings_command(self, message: Dict[str, Any], args: List[str]) -> None:
+        """
+        Handle the report settings command to manage user report preferences
+
+        Command format:
+        report settings [setting] [value]
+
+        Settings:
+        - format [standard|detailed|summary|compact]: Set default report format
+        - email [on|off]: Enable/disable email reports
+        - set-email [email]: Set default email address
+        """
+        sender_id = message['sender_id']
+
+        # Get current settings
+        settings = self.storage_manager.get_user_report_settings(sender_id)
+
+        # If no arguments, show current settings
+        if not args:
+            email_status = "enabled" if settings.get('email_reports', False) else "disabled"
+            email_address = settings.get('default_email', 'not set')
+
+            response = "# Your Report Settings\n\n"
+            response += f"**Default Format:** {settings.get('default_format', 'standard')}\n"
+            response += f"**Email Reports:** {email_status}\n"
+            response += f"**Default Email:** {email_address}\n\n"
+            response += "To change settings, use:\n"
+            response += "- `report settings format [standard|detailed|summary|compact]`\n"
+            response += "- `report settings email [on|off]`\n"
+            response += "- `report settings set-email [email]`\n"
+
+            self.bot_handler.send_reply(message, response)
+            return
+
+        # Handle setting changes
+        if len(args) >= 2:
+            setting = args[0].lower()
+            value = args[1].lower()
+
+            if setting == 'format':
+                if value in ['standard', 'detailed', 'summary', 'compact']:
+                    self.storage_manager.save_user_report_settings(sender_id, {'default_format': value})
+                    self.bot_handler.send_reply(message, f"Default report format set to **{value}**.")
+                else:
+                    self.bot_handler.send_reply(message,
+                        "Invalid format. Please use one of: standard, detailed, summary, compact.")
+
+            elif setting == 'email':
+                if value in ['on', 'true', 'yes', 'enable']:
+                    self.storage_manager.save_user_report_settings(sender_id, {'email_reports': True})
+
+                    # Check if email is set
+                    if not settings.get('default_email'):
+                        self.bot_handler.send_reply(message,
+                            "Email reports enabled. Please set your email address with `report settings set-email [email]`.")
+                    else:
+                        self.bot_handler.send_reply(message,
+                            f"Email reports enabled. Reports will be sent to {settings.get('default_email')}.")
+
+                elif value in ['off', 'false', 'no', 'disable']:
+                    self.storage_manager.save_user_report_settings(sender_id, {'email_reports': False})
+                    self.bot_handler.send_reply(message, "Email reports disabled.")
+                else:
+                    self.bot_handler.send_reply(message,
+                        "Invalid value. Please use 'on' or 'off'.")
+
+            elif setting == 'set-email':
+                # Simple email validation
+                if '@' in value and '.' in value:
+                    self.storage_manager.save_user_report_settings(sender_id, {'default_email': value})
+                    self.bot_handler.send_reply(message, f"Default email address set to {value}.")
+                else:
+                    self.bot_handler.send_reply(message,
+                        "Invalid email address. Please provide a valid email.")
+            else:
+                self.bot_handler.send_reply(message,
+                    "Unknown setting. Available settings: format, email, set-email.")
+        else:
+            self.bot_handler.send_reply(message,
+                "Please provide a setting and value. Example: `report settings format detailed`")
 
 
 handler_class = StandupBotHandler
