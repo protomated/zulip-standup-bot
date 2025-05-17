@@ -10,4 +10,26 @@ services:
       - ZULIP_API_KEY=${ZULIP_API_KEY:-your_api_key_here}
       - ZULIP_SITE=${ZULIP_SITE:-https://your-zulip-site.zulipchat.com}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_api_key_here}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-standup_bot}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     restart: unless-stopped
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-standup_bot}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

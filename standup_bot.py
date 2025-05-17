@@ -66,7 +66,7 @@ Type `help` for more detailed information.
         self.logger.info(f"Bot initialized with email: {self.config.email}")
 
         # Initialize components
-        self.storage_manager = StorageManager(bot_handler.storage)
+        self.storage_manager = StorageManager(bot_handler.storage, self.config)
         self.standup_manager = StandupManager(self.storage_manager, bot_handler)
         self.schedule_manager = ScheduleManager(self.storage_manager, bot_handler)
         self.reminder_service = ReminderService(self.storage_manager, bot_handler)

@@ -1,6 +1,6 @@
 import os
 import configparser
-from typing import Optional
+from typing import Optional, Dict
 
 
 class Config:
@@ -24,6 +24,13 @@ class Config:
         self.smtp_username = None
         self.smtp_password = None
         self.from_email = None
+
+        # PostgreSQL database configuration
+        self.db_host = None
+        self.db_port = 5432  # Default PostgreSQL port
+        self.db_name = None
+        self.db_user = None
+        self.db_password = None
 
         # Load configuration from file if provided
         if config_file and os.path.exists(config_file):
@@ -54,6 +61,13 @@ class Config:
             self.smtp_username = config['email'].get('smtp_username')
             self.smtp_password = config['email'].get('smtp_password')
             self.from_email = config['email'].get('from_email')
+
+        if 'database' in config:
+            self.db_host = config['database'].get('host')
+            self.db_port = config['database'].get('port', '5432')
+            self.db_name = config['database'].get('name')
+            self.db_user = config['database'].get('user')
+            self.db_password = config['database'].get('password')
 
     def _load_from_env(self) -> None:
         """Load configuration from environment variables"""
@@ -87,6 +101,22 @@ class Config:
         if os.environ.get('FROM_EMAIL'):
             self.from_email = os.environ.get('FROM_EMAIL')
 
+        # PostgreSQL configuration
+        if os.environ.get('DB_HOST'):
+            self.db_host = os.environ.get('DB_HOST')
+
+        if os.environ.get('DB_PORT'):
+            self.db_port = os.environ.get('DB_PORT')
+
+        if os.environ.get('DB_NAME'):
+            self.db_name = os.environ.get('DB_NAME')
+
+        if os.environ.get('DB_USER'):
+            self.db_user = os.environ.get('DB_USER')
+
+        if os.environ.get('DB_PASSWORD'):
+            self.db_password = os.environ.get('DB_PASSWORD')
+
     def _validate_config(self) -> None:
         """Validate that required configuration is present"""
         if not all([self.email, self.api_key, self.site]):
@@ -114,6 +144,16 @@ class Config:
             'from_email': self.from_email
         }
 
+    def get_db_config(self) -> Dict[str, str]:
+        """Return database configuration as a dictionary"""
+        return {
+            'host': self.db_host,
+            'port': self.db_port,
+            'database': self.db_name,
+            'user': self.db_user,
+            'password': self.db_password
+        }
+
     def is_email_configured(self) -> bool:
         """Check if email is configured"""
         return all([
@@ -122,4 +162,14 @@ class Config:
             self.smtp_username,
             self.smtp_password,
             self.from_email
+        ])
+
+    def is_db_configured(self) -> bool:
+        """Check if database is configured"""
+        return all([
+            self.db_host,
+            self.db_port,
+            self.db_name,
+            self.db_user,
+            self.db_password
         ])
