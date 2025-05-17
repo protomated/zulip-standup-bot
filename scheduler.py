@@ -3,8 +3,12 @@ import threading
 import time
 import datetime
 import heapq
+import logging
+import pytz
 from zulip_bots.lib import BotHandler
 from storage_manager import StorageManager
+from schedule_engine import ScheduleEngine, SchedulePattern, HolidayCalendar, CalendarIntegration, ScheduleConflictDetector
+from schedule_adapter import ScheduleAdapter
 
 
 class ScheduleManager:
@@ -16,6 +20,14 @@ class ScheduleManager:
         self.storage = storage_manager
         self.bot_handler = bot_handler
         self.timezone_manager = timezone_manager
+
+        # Initialize the new scheduling components
+        self.schedule_engine = ScheduleEngine()
+        self.holiday_calendar = HolidayCalendar()
+        self.calendar_integration = CalendarIntegration()
+        self.conflict_detector = ScheduleConflictDetector(self.calendar_integration, self.holiday_calendar)
+
+        # Keep the legacy scheduler for backward compatibility
         self.scheduled_tasks = []
         self.scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
         self.scheduler_thread.start()
@@ -33,14 +45,23 @@ class ScheduleManager:
         while True:
             now = time.time()
 
-            # Check for tasks that need to be executed
+            # Check for tasks in the legacy scheduler
             while self.scheduled_tasks and self.scheduled_tasks[0][0] <= now:
                 task_time, task_id, task_func, task_args = heapq.heappop(self.scheduled_tasks)
                 try:
                     task_func(*task_args)
                 except Exception as e:
                     # Log exception but don't crash the scheduler
-                    print(f"Error in scheduled task {task_id}: {e}")
+                    logging.error(f"Error in scheduled task {task_id}: {e}")
+
+            # Check for tasks in the new scheduler engine
+            due_tasks = self.schedule_engine.get_due_tasks(now)
+            for task_id, task_func, task_args in due_tasks:
+                try:
+                    task_func(*task_args)
+                except Exception as e:
+                    # Log exception but don't crash the scheduler
+                    logging.error(f"Error in scheduled task {task_id}: {e}")
 
             # Sleep for a short time
             time.sleep(10)
@@ -51,15 +72,27 @@ class ScheduleManager:
 
     def _schedule_standup(self, standup: Dict[str, Any]) -> None:
         """Schedule a standup meeting"""
-        days = standup['schedule']['days']
-        time_str = standup['schedule']['time']
+        # Convert the schedule to a SchedulePattern
+        schedule_pattern = ScheduleAdapter.legacy_to_pattern(standup['schedule'])
+
+        # Schedule the standup using the new engine
+        self.schedule_engine.schedule_task(
+            f"standup_start_{standup['id']}",
+            schedule_pattern,
+            self._start_standup,
+            standup['id']
+        )
+
+        # For backward compatibility, also schedule using the legacy method
+        days = standup['schedule'].get('days', [])
+        time_str = standup['schedule'].get('time', '00:00')
         timezone = standup['schedule'].get('timezone', 'UTC')
 
-        # Calculate next occurrence
+        # Calculate next occurrence using legacy method
         next_time = self._calculate_next_occurrence(days, time_str, timezone)
 
         if next_time:
-            # Schedule the standup start
+            # Schedule the standup start using legacy scheduler
             self.schedule_task(
                 next_time,
                 f"standup_start_{standup['id']}",
@@ -337,6 +370,258 @@ class ScheduleManager:
             logging.getLogger('standup_bot.scheduler').error(
                 f"Error ending standup {standup_id}: {e}"
             )
+
+    def create_daily_schedule(self, time: str, timezone: str = 'UTC',
+                             interval: int = 1, duration: int = 86400) -> Dict[str, Any]:
+        """
+        Create a daily schedule configuration.
+
+        Args:
+            time: Time in HH:MM format
+            timezone: Timezone string
+            interval: Interval in days (default: 1)
+            duration: Duration of the standup in seconds (default: 24 hours)
+
+        Returns:
+            Schedule configuration dictionary
+        """
+        pattern = ScheduleAdapter.create_daily_pattern(time, timezone, interval)
+        return ScheduleAdapter.pattern_to_storage(pattern, duration)
+
+    def create_weekly_schedule(self, days: List[str], time: str, timezone: str = 'UTC',
+                              interval: int = 1, duration: int = 86400) -> Dict[str, Any]:
+        """
+        Create a weekly schedule configuration.
+
+        Args:
+            days: List of days of the week (e.g., ['monday', 'wednesday', 'friday'])
+            time: Time in HH:MM format
+            timezone: Timezone string
+            interval: Interval in weeks (default: 1)
+            duration: Duration of the standup in seconds (default: 24 hours)
+
+        Returns:
+            Schedule configuration dictionary
+        """
+        pattern = ScheduleAdapter.create_weekly_pattern(days, time, timezone, interval)
+        return ScheduleAdapter.pattern_to_storage(pattern, duration)
+
+    def create_monthly_schedule(self, day: int, time: str, timezone: str = 'UTC',
+                               interval: int = 1, duration: int = 86400) -> Dict[str, Any]:
+        """
+        Create a monthly schedule configuration with a specific day of the month.
+
+        Args:
+            day: Day of the month (1-31)
+            time: Time in HH:MM format
+            timezone: Timezone string
+            interval: Interval in months (default: 1)
+            duration: Duration of the standup in seconds (default: 24 hours)
+
+        Returns:
+            Schedule configuration dictionary
+        """
+        pattern = ScheduleAdapter.create_monthly_pattern(day, time, timezone, interval)
+        return ScheduleAdapter.pattern_to_storage(pattern, duration)
+
+    def create_monthly_nth_weekday_schedule(self, nth_weekday: str, time: str, timezone: str = 'UTC',
+                                           interval: int = 1, duration: int = 86400) -> Dict[str, Any]:
+        """
+        Create a monthly schedule configuration with an nth weekday (e.g., "first monday", "last friday").
+
+        Args:
+            nth_weekday: String specifying the nth weekday (e.g., "first monday", "last friday")
+            time: Time in HH:MM format
+            timezone: Timezone string
+            interval: Interval in months (default: 1)
+            duration: Duration of the standup in seconds (default: 24 hours)
+
+        Returns:
+            Schedule configuration dictionary
+        """
+        pattern = ScheduleAdapter.create_monthly_nth_weekday_pattern(nth_weekday, time, timezone, interval)
+        return ScheduleAdapter.pattern_to_storage(pattern, duration)
+
+    def create_yearly_schedule(self, month: int, day: int, time: str, timezone: str = 'UTC',
+                              interval: int = 1, duration: int = 86400) -> Dict[str, Any]:
+        """
+        Create a yearly schedule configuration.
+
+        Args:
+            month: Month (1-12)
+            day: Day of the month (1-31)
+            time: Time in HH:MM format
+            timezone: Timezone string
+            interval: Interval in years (default: 1)
+            duration: Duration of the standup in seconds (default: 24 hours)
+
+        Returns:
+            Schedule configuration dictionary
+        """
+        pattern = ScheduleAdapter.create_yearly_pattern(month, day, time, timezone, interval)
+        return ScheduleAdapter.pattern_to_storage(pattern, duration)
+
+    def create_one_time_schedule(self, date: str, time: str, timezone: str = 'UTC',
+                                duration: int = 86400) -> Dict[str, Any]:
+        """
+        Create a one-time schedule configuration.
+
+        Args:
+            date: Date in YYYY-MM-DD format
+            time: Time in HH:MM format
+            timezone: Timezone string
+            duration: Duration of the standup in seconds (default: 24 hours)
+
+        Returns:
+            Schedule configuration dictionary
+        """
+        pattern = ScheduleAdapter.create_one_time_pattern(date, time, timezone)
+        return ScheduleAdapter.pattern_to_storage(pattern, duration)
+
+    def add_user_ooo(self, user_id: int, start_date: str, end_date: str, reason: Optional[str] = None) -> None:
+        """
+        Add an Out of Office period for a user.
+
+        Args:
+            user_id: User ID
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            reason: Optional reason for the OOO period
+        """
+        self.calendar_integration.add_ooo(user_id, start_date, end_date, reason)
+
+    def remove_user_ooo(self, user_id: int, start_date: str, end_date: str) -> bool:
+        """
+        Remove an Out of Office period for a user.
+
+        Args:
+            user_id: User ID
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+
+        Returns:
+            True if the OOO period was removed, False if it wasn't found
+        """
+        return self.calendar_integration.remove_ooo(user_id, start_date, end_date)
+
+    def is_user_ooo(self, user_id: int, date: str) -> bool:
+        """
+        Check if a user is Out of Office on a specific date.
+
+        Args:
+            user_id: User ID
+            date: Date in YYYY-MM-DD format
+
+        Returns:
+            True if the user is OOO on the specified date, False otherwise
+        """
+        return self.calendar_integration.is_user_ooo(user_id, date)
+
+    def get_ooo_users(self, date: str) -> List[int]:
+        """
+        Get all users who are Out of Office on a specific date.
+
+        Args:
+            date: Date in YYYY-MM-DD format
+
+        Returns:
+            List of user IDs who are OOO on the specified date
+        """
+        return self.calendar_integration.get_ooo_users(date)
+
+    def get_user_ooo_periods(self, user_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all Out of Office periods for a user.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            List of OOO periods for the user
+        """
+        return self.calendar_integration.get_user_ooo_periods(user_id)
+
+    def add_custom_holiday(self, date_str: str, name: str) -> None:
+        """
+        Add a custom holiday.
+
+        Args:
+            date_str: Date string in YYYY-MM-DD format
+            name: Name of the holiday
+        """
+        self.holiday_calendar.add_custom_holiday(date_str, name)
+
+    def is_holiday(self, date_str: str) -> bool:
+        """
+        Check if a date is a holiday.
+
+        Args:
+            date_str: Date string in YYYY-MM-DD format
+
+        Returns:
+            True if the date is a holiday, False otherwise
+        """
+        return self.holiday_calendar.is_holiday(date_str)
+
+    def is_weekend(self, date_str: str) -> bool:
+        """
+        Check if a date is a weekend (Saturday or Sunday).
+
+        Args:
+            date_str: Date string in YYYY-MM-DD format
+
+        Returns:
+            True if the date is a weekend, False otherwise
+        """
+        return self.holiday_calendar.is_weekend(date_str)
+
+    def is_business_day(self, date_str: str) -> bool:
+        """
+        Check if a date is a business day (not a weekend or holiday).
+
+        Args:
+            date_str: Date string in YYYY-MM-DD format
+
+        Returns:
+            True if the date is a business day, False otherwise
+        """
+        return self.holiday_calendar.is_business_day(date_str)
+
+    def get_next_business_day(self, date_str: str) -> str:
+        """
+        Get the next business day after a given date.
+
+        Args:
+            date_str: Date string in YYYY-MM-DD format
+
+        Returns:
+            Date string of the next business day in YYYY-MM-DD format
+        """
+        next_day = self.holiday_calendar.get_next_business_day(date_str)
+        return next_day.strftime('%Y-%m-%d')
+
+    def check_schedule_conflicts(self, standup_id: str, schedule: Dict[str, Any], participants: List[int],
+                               start_date: str, end_date: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Check for scheduling conflicts for a standup.
+
+        Args:
+            standup_id: The ID of the standup
+            schedule: The schedule configuration
+            participants: List of participant IDs
+            start_date: Start date for conflict checking (YYYY-MM-DD)
+            end_date: Optional end date for conflict checking (YYYY-MM-DD)
+
+        Returns:
+            Dictionary with conflict information
+        """
+        # Convert the schedule to a SchedulePattern
+        schedule_pattern = ScheduleAdapter.legacy_to_pattern(schedule)
+
+        # Check for conflicts
+        return self.conflict_detector.check_conflicts(
+            standup_id, schedule_pattern, participants, start_date, end_date
+        )
 
     def _generate_report(self, standup: Dict[str, Any], date: str) -> str:
         """
