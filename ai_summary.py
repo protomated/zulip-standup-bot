@@ -14,7 +14,7 @@ class AISummaryGenerator:
 
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.client = OpenAI(api_key=api_key) if api_key else None
+        self.client = None
         self.logger = logging.getLogger('standup_bot.ai_summary')
         self.cache = {}  # Simple in-memory cache
         self.cache_timestamps = {}  # Track when entries were added to cache
@@ -24,6 +24,21 @@ class AISummaryGenerator:
         self.model = "gpt-3.5-turbo"  # Default model
         self.encoding = tiktoken.encoding_for_model(self.model)
         self.last_cache_cleanup = time.time()  # Track when cache was last cleaned
+
+        # Initialize OpenAI client with proper error handling
+        if not api_key:
+            self.logger.warning("OpenAI API key not provided. AI summaries are disabled.")
+        else:
+            try:
+                # Validate API key format
+                if not api_key.startswith('sk-') or len(api_key) < 20:
+                    self.logger.error("Malformed API key. API key should start with 'sk-' and be at least 20 characters long.")
+                else:
+                    self.client = OpenAI(api_key=api_key)
+                    self.logger.info("OpenAI client initialized successfully.")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize OpenAI client: {str(e)}")
+                # Continue without AI summaries
 
     def generate_summary(self, standup_name: str, responses: Dict[str, Dict[str, Any]],
                          standup_id: str = None, date: str = None) -> str:

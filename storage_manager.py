@@ -756,12 +756,14 @@ class StorageManager:
                 self.logger.error(f"Error using database storage: {str(e)}")
                 session.rollback()
                 # Fall back to Zulip storage
-                return self._use_zulip_storage(keys)
+                with self._use_zulip_storage(keys) as zulip_cache:
+                    yield zulip_cache
             finally:
                 session.close()
         else:
             # Use Zulip storage for all keys
-            return self._use_zulip_storage(keys)
+            with self._use_zulip_storage(keys) as zulip_cache:
+                yield zulip_cache
 
     @contextmanager
     def _use_zulip_storage(self, keys: List[str]) -> ContextManager[Dict[str, Any]]:

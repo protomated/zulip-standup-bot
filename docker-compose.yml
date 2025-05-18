@@ -2,14 +2,16 @@ version: '3.8'
 
 services:
   zulip-standup-bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     volumes:
       - .:/app
     environment:
       - ZULIP_EMAIL=${ZULIP_EMAIL:-standup-bot@example.com}
       - ZULIP_API_KEY=${ZULIP_API_KEY:-your_api_key_here}
       - ZULIP_SITE=${ZULIP_SITE:-https://your-zulip-site.zulipchat.com}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_api_key_here}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-your_openai_api_key_here_please_replace_with_actual_key}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB:-standup_bot}
@@ -28,7 +30,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "54555:5432"
     restart: unless-stopped
 
 volumes:

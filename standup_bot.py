@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Set
+from typing import Dict, Any, List, Set, Optional
 import zulip
 from zulip_bots.lib import BotHandler
 import json

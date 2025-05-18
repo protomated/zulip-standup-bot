@@ -239,10 +239,12 @@ class BackupManager:
 
         # Backup Zulip storage data
         try:
-            # Get all keys in storage
+            # Use a hardcoded list of known keys instead of trying to get all keys
+            known_keys = ['standups', 'user_preferences', 'responses']
             all_data = {}
-            for key in self.storage_manager.storage.keys():
-                all_data[key] = self.storage_manager.storage.get(key)
+            for key in known_keys:
+                if self.storage_manager.storage.contains(key):
+                    all_data[key] = self.storage_manager.storage.get(key)
 
             backup_data['data']['zulip_storage'] = all_data
         except Exception as e:

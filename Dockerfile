@@ -1,23 +1,37 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies including PostgreSQL client
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install uv package manager (pinned version for stability)
+COPY --from=ghcr.io/astral-sh/uv:0.7.5 /uv /bin/uv
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Set environment variables for optimized uv performance
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
+
+# Create virtual environment
+RUN uv venv /app/.venv
+
+# Copy pyproject.toml (and uv.lock if you have it)
+COPY pyproject.toml ./
+COPY uv.lock* ./
+
+# Install dependencies using uv directly from pyproject.toml
+#RUN #uv pip install --no-cache-dir .
+RUN uv sync --all-groups
+
 
 # Copy application code
 COPY . .
 
 # Create a non-root user to run the application
 RUN useradd -m botuser
+
+# Create backups and logs directories and set permissions
+RUN mkdir -p ./backups ./logs && chown -R botuser:botuser ./backups ./logs
+
 USER botuser
 
-# Command to run the application
-CMD ["python", "run_bot.py"]
+# Command to run the application using uv run instead of python directly
+CMD ["uv", "run", "run_bot.py"]

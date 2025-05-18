@@ -241,13 +241,22 @@ class Monitoring:
             True if healthy, False otherwise.
         """
         try:
-            # Try to get own user info as a simple API test
-            result = bot_handler.get_own_user_info()
-            if result and 'email' in result:
+            # Use a simple API call to check if the API is working
+            # We'll use the storage API as a simple test
+            test_key = 'health_check_test'
+            test_value = {'timestamp': time.time()}
+
+            # Try to store a value
+            bot_handler.storage.put(test_key, test_value)
+
+            # Try to retrieve the value
+            retrieved = bot_handler.storage.get(test_key)
+
+            if retrieved and 'timestamp' in retrieved:
                 self.update_component_health('zulip_api', 'healthy')
                 return True
             else:
-                self.update_component_health('zulip_api', 'unhealthy', {'error': 'Failed to get user info'})
+                self.update_component_health('zulip_api', 'unhealthy', {'error': 'Failed to verify API storage'})
                 return False
         except Exception as e:
             self.update_component_health('zulip_api', 'unhealthy', {'error': str(e)})

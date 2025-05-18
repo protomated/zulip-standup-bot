@@ -236,6 +236,20 @@ The bot can be configured using environment variables or a `.zuliprc` file:
 | `ZULIP_SITE` | Zulip instance URL | Yes |
 | `OPENAI_API_KEY` | OpenAI API key for AI summaries | No |
 
+#### OpenAI API Key Format
+
+The OpenAI API key must be in the correct format to work properly:
+
+- It should start with `sk-`
+- It should be approximately 51 characters long
+- Example format: `sk-abcdefghijklmnopqrstuvwxyz1234567890ABCDEFG`
+
+If you encounter a "Malformed API key" error during startup, check that your API key follows this format. If you don't have a valid OpenAI API key, you can:
+
+1. Leave it blank (AI summaries will be disabled)
+2. Use a placeholder like `sk-your-openai-api-key` (AI summaries will be disabled)
+3. Get a valid API key from [OpenAI's platform](https://platform.openai.com/api-keys)
+
 ### PostgreSQL Database Configuration
 
 The bot now uses PostgreSQL for data storage, providing better data consistency and modularity.
