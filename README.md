@@ -13,6 +13,12 @@ A comprehensive standup meeting automation bot for Zulip. This bot enables teams
 - **Historical Data**: Access to past standup meetings and responses
 - **Activity Statistics**: Participation tracking and analytics
 - **Smart Reminders**: Automatic reminders for participants
+- **Robust Error Handling**: Centralized error handling with retries and fallbacks
+- **Monitoring & Logging**: Comprehensive monitoring and logging capabilities
+- **Health Checks**: HTTP endpoints for health and readiness checks
+- **Backup & Recovery**: Automated backup and recovery procedures
+- **Rate Limiting**: Protection against excessive API usage
+- **Admin Commands**: Maintenance commands for administrators
 
 ## Quick Start
 
@@ -243,6 +249,104 @@ The bot now uses PostgreSQL for data storage, providing better data consistency 
 | `DB_PASSWORD` | PostgreSQL password | Yes |
 
 If PostgreSQL configuration is not provided, the bot will fall back to using Zulip's built-in storage system.
+
+### Operations and Maintenance Configuration
+
+| Environment Variable | Description | Default |
+|----------------------|-------------|---------|
+| `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | INFO |
+| `LOG_FILE` | Path to log file (if not set, logs to stdout only) | None |
+| `HEALTH_CHECK_PORT` | Port for health check HTTP server | 8080 |
+| `DISABLE_HEALTH_CHECK` | Set to "true" to disable health check server | false |
+| `BACKUP_DIR` | Directory for storing backups | ./backups |
+| `BACKUP_INTERVAL_HOURS` | Hours between automatic backups | 24 |
+| `MAX_BACKUPS` | Maximum number of backups to keep | 7 |
+| `DISABLE_BACKUPS` | Set to "true" to disable automatic backups | false |
+| `STANDUP_BOT_ADMIN_IDS` | Comma-separated list of Zulip user IDs who are bot admins | None |
+
+## Operations and Maintenance
+
+The bot includes several features to make it more reliable and easier to maintain in production environments.
+
+### Admin Commands
+
+Administrators can use the following commands to manage the bot:
+
+- `admin help` - Show help for admin commands
+- `admin status` - Show system status and health information
+- `admin backup [name]` - Create a backup (with optional name)
+- `admin restore <backup_file>` - Restore from a backup
+- `admin clear-errors` - Clear error statistics
+- `admin reset-rate-limits [key]` - Reset rate limits (optional key)
+- `admin restart-health-check` - Restart health check server
+- `admin add-admin <user_id>` - Add a user as admin
+- `admin remove-admin <user_id>` - Remove a user from admin list
+- `admin list-admins` - List all admin users
+- `admin debug <component>` - Show debug information for a component
+
+To set up initial administrators, use the `STANDUP_BOT_ADMIN_IDS` environment variable with a comma-separated list of Zulip user IDs.
+
+### Health Checks
+
+The bot provides HTTP endpoints for health monitoring:
+
+- `/health` or `/healthz` - Overall health status
+- `/metrics` - Performance metrics
+- `/readiness` - Readiness check (all components healthy or degraded)
+- `/liveness` - Liveness check (service is running)
+
+These endpoints return JSON responses and appropriate HTTP status codes (200 for healthy, 503 for unhealthy).
+
+To configure the health check server:
+```bash
+# Set custom port (default is 8080)
+python run_bot.py --health-check-port 8081
+
+# Disable health check server
+python run_bot.py --disable-health-check
+```
+
+### Backup and Recovery
+
+The bot automatically creates backups of all data at regular intervals. Backups include both database data and Zulip storage data.
+
+To manage backups:
+- Use `admin backup` to create a manual backup
+- Use `admin restore <backup_file>` to restore from a backup
+- Configure backup settings with environment variables:
+  ```
+  BACKUP_DIR=./my_backups
+  BACKUP_INTERVAL_HOURS=12
+  MAX_BACKUPS=14
+  ```
+
+### Logging and Monitoring
+
+Enhanced logging and monitoring capabilities:
+
+- Structured logging with timestamps and log levels
+- File-based logging option
+- Performance metrics collection
+- Component health monitoring
+- Error tracking and statistics
+
+To configure logging:
+```bash
+# Enable debug logging
+python run_bot.py --debug
+
+# Log to file
+python run_bot.py --log-file /path/to/standup_bot.log
+```
+
+### Error Handling and Rate Limiting
+
+The bot includes robust error handling and rate limiting:
+
+- Centralized error handling with automatic retries
+- Detailed error logging and tracking
+- Rate limiting to prevent API abuse
+- Throttling of scheduled tasks
 
 ## License
 

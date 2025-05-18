@@ -153,7 +153,8 @@ Thank you for using StandupBot!
 - `list` - List all standups you're part of
 - `switch [standup_id]` - Set your active standup
 - `status [standup_id]` - Submit your status for a standup
-- `remind [standup_id]` - Send reminders to users who haven't submitted their status
+- `remind [standup_id] [level]` - Send reminders to users who haven't submitted their status
+- `reminder settings [standup_id]` - Manage reminder settings
 - `report [standup_id] [date] [format] [email]` - Generate a report for a standup
 - `report settings` - Manage your report preferences
 - `cancel [standup_id]` - Cancel a standup meeting
@@ -166,6 +167,22 @@ You can be part of multiple standups for different teams or projects:
 - Filter standups with `list team:TEAM` or `list project:PROJECT`
 - Set your active standup with `switch [standup_id]`
 - Use `status` without an ID to submit for your active standup
+
+## Reminders
+Send reminders to team members who haven't submitted their updates:
+- `remind [standup_id]` - Send normal reminders to non-responders
+- `remind [standup_id] friendly` - Send friendly reminders
+- `remind [standup_id] urgent` - Send urgent reminders
+- `reminder settings [standup_id]` - View reminder settings
+- `reminder settings help` - See all reminder configuration options
+
+Reminders are automatically scheduled at different times:
+- Friendly reminders before the standup is due
+- Normal reminders shortly after the standup is due
+- Urgent reminders when the standup is significantly overdue
+- Supervisor notifications for persistent non-responders
+
+Team members who are out-of-office are automatically excluded from reminders.
 
 ## Report Generation
 Generate well-formatted reports for your standups:
@@ -223,4 +240,107 @@ Contact your administrator or visit our documentation.
 {error}
 
 Type `help` for assistance.
+"""
+
+    def reminder_settings_help(self) -> str:
+        """Help message for reminder settings commands"""
+        return """
+# Reminder Settings Help
+
+Configure how reminders are sent to team members who haven't submitted their standup updates.
+
+## Commands
+
+- `reminder settings [standup_id]` - View current reminder settings
+- `reminder settings [standup_id] enable [friendly|normal|urgent|supervisor]` - Enable a reminder level
+- `reminder settings [standup_id] disable [friendly|normal|urgent|supervisor]` - Disable a reminder level
+- `reminder settings [standup_id] interval [level] [minutes]` - Set reminder interval in minutes
+- `reminder settings [standup_id] add-supervisor @user` - Add a supervisor for notifications
+- `reminder settings [standup_id] remove-supervisor @user` - Remove a supervisor
+- `reminder settings [standup_id] template [level] [template]` - Set a custom template
+
+## Reminder Levels
+
+- **friendly**: Sent before the standup is due (gentle nudge)
+- **normal**: Sent shortly after the standup is due
+- **urgent**: Sent when the standup is significantly overdue
+- **supervisor**: Notification sent to supervisors about non-responders
+
+## Examples
+
+```
+reminder settings 123
+reminder settings 123 enable urgent
+reminder settings 123 disable friendly
+reminder settings 123 interval normal 30
+reminder settings 123 add-supervisor @manager
+```
+
+## Template Placeholders
+
+When creating custom templates, you can use these placeholders:
+- `{standup_name}` - The name of the standup
+- `{standup_id}` - The ID of the standup
+- `{questions}` - The standup questions
+"""
+
+    def reminder_settings_display(self, standup_id: str, settings: dict) -> str:
+        """Display current reminder settings"""
+        enabled_levels = settings.get('enabled_levels', [])
+        intervals = settings.get('intervals', {})
+        supervisors = settings.get('supervisors', [])
+        templates = settings.get('templates', {})
+
+        # Format enabled levels
+        enabled_str = ", ".join(enabled_levels) if enabled_levels else "None"
+
+        # Format intervals
+        intervals_str = ""
+        for level, minutes in intervals.items():
+            intervals_str += f"- **{level}**: {minutes} minutes\n"
+        if not intervals_str:
+            intervals_str = "Default intervals\n"
+
+        # Format supervisors
+        supervisors_str = ""
+        for supervisor_id in supervisors:
+            supervisors_str += f"- <@{supervisor_id}>\n"
+        if not supervisors_str:
+            supervisors_str = "None (standup creator will be notified)\n"
+
+        # Format custom templates
+        templates_str = ""
+        for level, template in templates.items():
+            templates_str += f"- **{level}**: Custom template set\n"
+        if not templates_str:
+            templates_str = "Using default templates\n"
+
+        return f"""
+# Reminder Settings for Standup {standup_id}
+
+## Enabled Reminder Levels
+{enabled_str}
+
+## Reminder Intervals
+{intervals_str}
+
+## Supervisors
+{supervisors_str}
+
+## Custom Templates
+{templates_str}
+
+To modify these settings, use the `reminder settings` commands.
+Type `reminder settings help` for more information.
+"""
+
+    def reminder_settings_updated(self, standup_id: str, setting_type: str, details: str) -> str:
+        """Confirmation message for updated reminder settings"""
+        return f"""
+✅ **Reminder Settings Updated**
+
+Successfully updated {setting_type} for standup {standup_id}.
+{details}
+
+View all settings with `reminder settings {standup_id}`
 """

@@ -4,18 +4,42 @@ import os
 import argparse
 import logging
 import importlib.util
+import traceback
+import time
 from zulip_bots.run import run_message_handler_for_bot
 from zulip_bots.lib import zulip_env_vars_are_present
 
+# Import our custom components
+from error_handler import ErrorHandler
+from monitoring import Monitoring
+from health_check import HealthCheckServer
+from backup_manager import BackupManager
+from rate_limiter import RateLimiter
+from config import Config
 
-def setup_logging():
-    """Set up logging configuration"""
+
+def setup_logging(log_file=None, log_level=logging.INFO):
+    """
+    Set up logging configuration
+
+    Args:
+        log_file: Optional path to log file
+        log_level: Logging level
+
+    Returns:
+        Logger instance
+    """
+    handlers = [logging.StreamHandler()]
+
+    # Add file handler if log file is specified
+    if log_file:
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        handlers.append(logging.FileHandler(log_file))
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler()
-        ]
+        handlers=handlers
     )
     return logging.getLogger('standup_bot')
 
@@ -26,16 +50,37 @@ def parse_args():
                         help='Path to the .zuliprc file')
     parser.add_argument('--debug', '-d', action='store_true',
                         help='Enable debug logging')
+    parser.add_argument('--log-file', '-l', help='Path to log file')
+    parser.add_argument('--health-check-port', '-p', type=int, default=8080,
+                        help='Port for health check server')
+    parser.add_argument('--disable-health-check', action='store_true',
+                        help='Disable health check server')
+    parser.add_argument('--disable-backups', action='store_true',
+                        help='Disable automatic backups')
     return parser.parse_args()
 
 
 def main():
-    args = parse_args()
-    logger = setup_logging()
+    try:
+        args = parse_args()
+        log_level = logging.DEBUG if args.debug else logging.INFO
+        logger = setup_logging(args.log_file, log_level)
 
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
+        # Create error handler
+        error_handler = ErrorHandler(logger)
 
+        # Wrap the main function with error handling
+        return run_bot_with_error_handling(args, logger, error_handler)
+    except Exception as e:
+        # Last resort error handling
+        print(f"Critical error: {str(e)}")
+        traceback.print_exc()
+        sys.exit(1)
+
+
+@ErrorHandler().with_error_handling(critical=True)
+def run_bot_with_error_handling(args, logger, error_handler):
+    """Run the bot with error handling"""
     bot_name = 'standup_bot'
     config_file = args.config_file
 
@@ -74,20 +119,55 @@ def main():
     lib_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(lib_module)
 
+    # Create monitoring system
+    monitoring = Monitoring(logger)
+
+    # Create rate limiter
+    rate_limiter = RateLimiter(logger)
+
     # Set additional parameters
     quiet = not args.debug  # Set quiet mode based on debug flag
     bot_config_file = None  # No separate bot config file
     bot_source = "source"   # Bot source is from a file
 
+    # Store components in the lib_module for access by the bot
+    lib_module.StandupBotHandler.error_handler = error_handler
+    lib_module.StandupBotHandler.monitoring = monitoring
+    lib_module.StandupBotHandler.rate_limiter = rate_limiter
+
+    # Start health check server if enabled
+    health_check_server = None
+    if not args.disable_health_check:
+        try:
+            health_check_server = HealthCheckServer(
+                monitoring.get_health_status,
+                port=args.health_check_port,
+                logger=logger
+            )
+            health_check_server.start()
+            lib_module.StandupBotHandler.health_check_server = health_check_server
+        except Exception as e:
+            logger.error(f"Failed to start health check server: {str(e)}", exc_info=True)
+
     # Call with all required parameters
-    run_message_handler_for_bot(
-        lib_module=lib_module,
-        quiet=quiet,
-        config_file=config_file,
-        bot_config_file=bot_config_file,
-        bot_name=bot_name,
-        bot_source=bot_source
-    )
+    try:
+        run_message_handler_for_bot(
+            lib_module=lib_module,
+            quiet=quiet,
+            config_file=config_file,
+            bot_config_file=bot_config_file,
+            bot_name=bot_name,
+            bot_source=bot_source
+        )
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    except Exception as e:
+        logger.error(f"Error running bot: {str(e)}", exc_info=True)
+    finally:
+        # Clean up
+        if health_check_server:
+            health_check_server.stop()
+        logger.info("Bot shutdown complete")
 
 
 if __name__ == '__main__':

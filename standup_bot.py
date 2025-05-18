@@ -7,6 +7,7 @@ import datetime
 import re
 import os
 import logging
+import traceback
 
 from standup_manager import StandupManager
 from storage_manager import StorageManager
@@ -20,11 +21,23 @@ from setup_wizard import SetupWizard
 from response_collector import ResponseCollector
 from email_service import EmailService
 
+# Import our custom components for operations and maintenance
+from error_handler import ErrorHandler
+from monitoring import Monitoring
+from backup_manager import BackupManager
+from rate_limiter import RateLimiter
+from admin_commands import AdminCommands
+
 
 class StandupBotHandler:
     """
     Main handler for the Standup Bot
     """
+    # Class variables for components that can be set from outside
+    error_handler = None
+    monitoring = None
+    rate_limiter = None
+    health_check_server = None
 
     def usage(self) -> str:
         """Return a brief help message for the bot"""
@@ -65,6 +78,21 @@ Type `help` for more detailed information.
         self.config = Config(config_file)
         self.logger.info(f"Bot initialized with email: {self.config.email}")
 
+        # Initialize error handler if not already set
+        if not self.__class__.error_handler:
+            self.__class__.error_handler = ErrorHandler(self.logger)
+        self.error_handler = self.__class__.error_handler
+
+        # Initialize monitoring if not already set
+        if not self.__class__.monitoring:
+            self.__class__.monitoring = Monitoring(self.logger, self.config)
+        self.monitoring = self.__class__.monitoring
+
+        # Initialize rate limiter if not already set
+        if not self.__class__.rate_limiter:
+            self.__class__.rate_limiter = RateLimiter(self.logger)
+        self.rate_limiter = self.__class__.rate_limiter
+
         # Initialize components
         self.storage_manager = StorageManager(bot_handler.storage, self.config)
         self.standup_manager = StandupManager(self.storage_manager, bot_handler)
@@ -83,8 +111,36 @@ Type `help` for more detailed information.
         else:
             self.logger.warning("Email service not configured - email functionality will be disabled")
 
+        # Initialize backup manager
+        self.backup_manager = BackupManager(self.storage_manager, self.config, self.logger)
+
+        # Initialize admin commands
+        self.admin_commands = AdminCommands(
+            bot_handler,
+            self.storage_manager,
+            self.error_handler,
+            self.monitoring,
+            self.backup_manager,
+            self.rate_limiter,
+            self.__class__.health_check_server,
+            self.logger
+        )
+
         # Initialize the scheduled tasks if any
         self.schedule_manager.initialize_scheduled_tasks()
+
+        # Start scheduled backups if not disabled
+        if not os.environ.get('DISABLE_BACKUPS', '').lower() in ('true', '1', 'yes'):
+            self.backup_manager.start_scheduled_backups()
+            self.logger.info("Scheduled backups started")
+
+        # Check component health
+        if self.monitoring:
+            if hasattr(self.storage_manager, 'db_engine'):
+                self.monitoring.check_database_health(self.storage_manager.db_engine)
+            self.monitoring.check_zulip_api_health(bot_handler)
+            self.monitoring.update_component_health('scheduler', 'healthy')
+            self.monitoring.update_component_health('storage', 'healthy')
 
         self.logger.info("Bot initialization complete")
 
@@ -92,12 +148,53 @@ Type `help` for more detailed information.
         """
         Main message handler for the bot
         """
-        if message['type'] == 'private':
-            # Handle direct messages to the bot
-            self._handle_private_message(message)
-        elif message['type'] == 'stream' and self._is_bot_mentioned(message):
-            # Handle stream messages where the bot is mentioned
-            self._handle_stream_message(message)
+        start_time = time.time()
+        sender_id = message.get('sender_id')
+
+        try:
+            # Check rate limits for the user
+            if self.rate_limiter and not self.rate_limiter.is_allowed('user_commands', str(sender_id)):
+                self.bot_handler.send_reply(message,
+                    "You're sending commands too quickly. Please wait a moment before trying again.")
+                return
+
+            # Track command in monitoring
+            if self.monitoring:
+                self.monitoring.track_command(message.get('content', ''), 0)
+
+            # Check for admin commands first
+            if message.get('content', '').strip().startswith('admin'):
+                if self.admin_commands.handle_admin_command(message):
+                    # Command was handled by admin commands
+                    return
+
+            # Regular command handling
+            if message['type'] == 'private':
+                # Handle direct messages to the bot
+                self._handle_private_message(message)
+            elif message['type'] == 'stream' and self._is_bot_mentioned(message):
+                # Handle stream messages where the bot is mentioned
+                self._handle_stream_message(message)
+
+        except Exception as e:
+            # Log the error
+            if self.error_handler:
+                self.error_handler.log_exception(e, f"Error handling message: {message.get('content', '')}", critical=True)
+            else:
+                self.logger.error(f"Error handling message: {str(e)}", exc_info=True)
+
+            # Track error in monitoring
+            if self.monitoring:
+                self.monitoring.track_error()
+
+            # Send error message to user
+            error_message = f"An error occurred while processing your request: {str(e)}"
+            self.bot_handler.send_reply(message, error_message)
+        finally:
+            # Calculate execution time and update monitoring
+            if self.monitoring:
+                execution_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+                self.monitoring.track_command(message.get('content', ''), execution_time)
 
     def _handle_private_message(self, message: Dict[str, Any]) -> None:
         """Handle direct messages sent to the bot"""
