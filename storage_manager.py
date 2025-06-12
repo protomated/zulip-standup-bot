@@ -686,6 +686,13 @@ class StorageManager:
         # Create a cache dictionary to hold the data
         cache = {}
 
+        # Check if we're using a StateHandler that doesn't have use_storage method
+        if not hasattr(self.storage, 'use_storage'):
+            # Use our own implementation for Zulip storage
+            with self._use_zulip_storage(keys) as zulip_cache:
+                yield zulip_cache
+            return
+
         # If using PostgreSQL and the key is 'user_preferences', use the database
         if self.db_engine and 'user_preferences' in keys:
             # For user_preferences, we'll handle it specially since it's stored in the UserPreference table

@@ -31,6 +31,9 @@ RUN useradd -m botuser
 # Create backups and logs directories and set permissions
 RUN mkdir -p ./backups ./logs && chown -R botuser:botuser ./backups ./logs
 
+# Declare volumes for persistent data
+VOLUME ["/app/backups"]
+
 USER botuser
 
 # Command to run the application using uv run instead of python directly

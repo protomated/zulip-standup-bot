@@ -6,6 +6,7 @@ import logging
 import importlib.util
 import traceback
 import time
+import glob
 from zulip_bots.run import run_message_handler_for_bot
 from zulip_bots.lib import zulip_env_vars_are_present
 
@@ -14,6 +15,7 @@ from error_handler import ErrorHandler
 from monitoring import Monitoring
 from health_check import HealthCheckServer
 from backup_manager import BackupManager
+from storage_manager import StorageManager
 from rate_limiter import RateLimiter
 from config import Config
 
@@ -79,10 +81,65 @@ def main():
 
 
 @ErrorHandler().with_error_handling(critical=True)
+def find_and_restore_latest_backup(logger):
+    """
+    Find the latest backup file and restore it.
+
+    This function is called when the bot starts to ensure data persistence
+    across container recreations and deployments.
+
+    Args:
+        logger: Logger instance
+
+    Returns:
+        bool: True if a backup was restored, False otherwise
+    """
+    try:
+        # Get backup directory from environment or use default
+        backup_dir = os.environ.get('BACKUP_DIR', './backups')
+
+        # Check if backup directory exists
+        if not os.path.exists(backup_dir):
+            logger.info(f"Backup directory {backup_dir} does not exist. No backups to restore.")
+            return False
+
+        # Find all backup files
+        backup_files = glob.glob(os.path.join(backup_dir, "*.json.gz"))
+        if not backup_files:
+            logger.info("No backup files found.")
+            return False
+
+        # Sort by modification time (newest first)
+        backup_files.sort(key=os.path.getmtime, reverse=True)
+        latest_backup = backup_files[0]
+
+        logger.info(f"Found latest backup: {latest_backup}")
+
+        # Create a temporary config and storage manager to restore the backup
+        config = Config()
+        storage_manager = StorageManager(None, config)
+        backup_manager = BackupManager(storage_manager, config, logger)
+
+        # Restore the backup
+        success = backup_manager.restore_backup(latest_backup)
+        if success:
+            logger.info(f"Successfully restored from backup: {latest_backup}")
+            return True
+        else:
+            logger.error(f"Failed to restore from backup: {latest_backup}")
+            return False
+    except Exception as e:
+        logger.error(f"Error restoring from backup: {str(e)}", exc_info=True)
+        return False
+
+
 def run_bot_with_error_handling(args, logger, error_handler):
     """Run the bot with error handling"""
     bot_name = 'standup_bot'
     config_file = args.config_file
+
+    # Attempt to restore from the latest backup
+    find_and_restore_latest_backup(logger)
 
     # Check if environment variables are set
     env_vars_present = zulip_env_vars_are_present()

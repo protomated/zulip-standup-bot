@@ -1,4 +1,4 @@
 {
   "schemaVersion": 2,
-   "imageName" : "docker.io/protomated/zulip-standup-bot:latest"
+  "dockerfilePath": "./Dockerfile"
 }
