@@ -390,6 +390,114 @@ Type `help` for more detailed information.
         self.bot_handler.send_reply(message,
             f"Switched to standup: **{standup['name']}**. You can now use `status` without specifying an ID.")
 
+    def _handle_settings_command(self, message: Dict[str, Any]) -> None:
+        """
+        Handle the settings command to manage standup settings
+        """
+        sender_id = message['sender_id']
+        content = message['content'].strip()
+
+        # Parse command
+        parts = content.split()
+        if len(parts) < 2:
+            self.bot_handler.send_reply(message,
+                "Usage: `settings [standup_id] [setting] [value]`\n\n" +
+                "Settings:\n" +
+                "- `reminder_time [minutes]` - Set minutes before standup to send reminder\n" +
+                "- `report_format [detailed|standard|compact]` - Set default report format\n" +
+                "- `ai_summary [on|off]` - Enable/disable AI summary")
+            return
+
+        try:
+            standup_id = int(parts[1])
+        except ValueError:
+            self.bot_handler.send_reply(message,
+                "Invalid standup ID. Please provide a numeric ID.")
+            return
+
+        # Check if standup exists
+        standup = self.standup_manager.get_standup(standup_id)
+        if not standup:
+            self.bot_handler.send_reply(message,
+                f"Standup with ID {standup_id} not found.")
+            return
+
+        # Check if user has permission to view the standup
+        if not self.standup_manager.has_permission(standup_id, sender_id, 'view'):
+            self.bot_handler.send_reply(message,
+                f"You don't have permission to access standup {standup_id}.")
+            return
+
+        # If no setting specified, show current settings
+        if len(parts) < 3:
+            settings = standup.get('settings', {})
+            response = f"# Settings for Standup {standup_id}: {standup['name']}\n\n"
+            response += f"- **Reminder Time:** {settings.get('reminder_time', 30)} minutes before standup\n"
+            response += f"- **Report Format:** {settings.get('report_format', 'detailed')}\n"
+            response += f"- **AI Summary:** {'Enabled' if settings.get('ai_summary', True) else 'Disabled'}\n\n"
+
+            # Show edit instructions if user has edit permission
+            if self.standup_manager.has_permission(standup_id, sender_id, 'edit'):
+                response += "To change settings, use `settings [standup_id] [setting] [value]`"
+            else:
+                response += "You don't have permission to edit these settings."
+
+            self.bot_handler.send_reply(message, response)
+            return
+
+        # Check if user has permission to edit the standup
+        if not self.standup_manager.has_permission(standup_id, sender_id, 'edit'):
+            self.bot_handler.send_reply(message,
+                f"You don't have permission to edit settings for standup {standup_id}.")
+            return
+
+        # Handle different settings
+        setting = parts[2]
+        if setting == 'reminder_time' and len(parts) >= 4:
+            try:
+                minutes = int(parts[3])
+                if minutes < 0:
+                    self.bot_handler.send_reply(message, "Reminder time must be a positive number.")
+                    return
+
+                if self.standup_manager.update_settings(standup_id, {'reminder_time': minutes}, sender_id):
+                    self.bot_handler.send_reply(message, 
+                        f"Updated reminder time to {minutes} minutes before standup.")
+                else:
+                    self.bot_handler.send_reply(message, "Failed to update settings.")
+            except ValueError:
+                self.bot_handler.send_reply(message, "Invalid value. Please provide a number for minutes.")
+
+        elif setting == 'report_format' and len(parts) >= 4:
+            format_value = parts[3]
+            if format_value not in ['detailed', 'standard', 'compact']:
+                self.bot_handler.send_reply(message, 
+                    "Invalid format. Use 'detailed', 'standard', or 'compact'.")
+                return
+
+            if self.standup_manager.update_settings(standup_id, {'report_format': format_value}, sender_id):
+                self.bot_handler.send_reply(message, 
+                    f"Updated report format to '{format_value}'.")
+            else:
+                self.bot_handler.send_reply(message, "Failed to update settings.")
+
+        elif setting == 'ai_summary' and len(parts) >= 4:
+            value = parts[3].lower()
+            if value not in ['on', 'off']:
+                self.bot_handler.send_reply(message, "Invalid value. Use 'on' or 'off'.")
+                return
+
+            enabled = (value == 'on')
+            if self.standup_manager.update_settings(standup_id, {'ai_summary': enabled}, sender_id):
+                status = "enabled" if enabled else "disabled"
+                self.bot_handler.send_reply(message, f"AI summary is now {status}.")
+            else:
+                self.bot_handler.send_reply(message, "Failed to update settings.")
+
+        else:
+            self.bot_handler.send_reply(message,
+                "Invalid setting or missing value. Type `settings [standup_id]` for usage help.")
+
     def _handle_permissions_command(self, message: Dict[str, Any]) -> None:
         """
         Handle the permissions command to manage standup permissions
