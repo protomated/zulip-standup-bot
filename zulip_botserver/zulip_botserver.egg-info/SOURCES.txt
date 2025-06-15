@@ -1,0 +1,13 @@
+README.md
+setup.py
+tests/test_server.py
+zulip_botserver/__init__.py
+zulip_botserver/input_parameters.py
+zulip_botserver/py.typed
+zulip_botserver/server.py
+zulip_botserver.egg-info/PKG-INFO
+zulip_botserver.egg-info/SOURCES.txt
+zulip_botserver.egg-info/dependency_links.txt
+zulip_botserver.egg-info/entry_points.txt
+zulip_botserver.egg-info/requires.txt
+zulip_botserver.egg-info/top_level.txt

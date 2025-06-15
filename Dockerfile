@@ -1,4 +1,4 @@
-FROM python:3.12.6-slim
+FROM python:3.9-slim
 
 WORKDIR /app
 
@@ -24,4 +24,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5002
 
 # Command to run the bot server
-CMD ["python", "-m", "zulip_botserver", "--use-env-vars", "--port", "5002"]
+CMD ["zulip-botserver", "--use-env-vars", "--port", "5002"]
