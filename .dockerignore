@@ -1,7 +1,6 @@
 # Git
 .git
 .gitignore
-.github
 
 # Python
 __pycache__/
@@ -16,7 +15,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -24,23 +22,31 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-.pytest_cache/
-.coverage
-htmlcov/
-.venv/
+
+# Virtual environments
 venv/
+ENV/
+env/
 
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
-
-# Editor directories and files
+# IDE files
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Project specific
-zuliprc
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Test files
+test_*.py
+tests/
+
+# Documentation
+docs/
+*.md
+!README.md
+!DEPLOYMENT.md
+
+# Logs
 *.log

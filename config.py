@@ -1,175 +1,107 @@
 import os
-import configparser
-from typing import Optional, Dict
-
+import logging
+from typing import Any, Dict, Optional
 
 class Config:
     """
-    Configuration management for the Standup Bot.
-    Supports both file-based configuration (.zuliprc) and environment variables.
+    Configuration class for the Standup Bot.
+    Loads configuration from environment variables with fallbacks to default values.
     """
 
-    def __init__(self, config_file: Optional[str] = None):
-        # Zulip API credentials
-        self.email = None
-        self.api_key = None
-        self.site = None
+    def __init__(self):
+        # Zulip Configuration
+        self.zulip_email = os.getenv('ZULIP_EMAIL')
+        self.zulip_api_key = os.getenv('ZULIP_API_KEY')
+        self.zulip_site = os.getenv('ZULIP_SITE')
+        self.zulip_bot_name = os.getenv('ZULIP_BOT_NAME', 'Standup Bot')
 
-        # OpenAI API key for AI summaries
-        self.openai_api_key = None
+        # OpenAI Configuration
+        self.openai_api_key = os.getenv('OPENAI_API_KEY')
 
-        # Email configuration for report distribution
-        self.smtp_server = None
-        self.smtp_port = 587  # Default to TLS port
-        self.smtp_username = None
-        self.smtp_password = None
-        self.from_email = None
+        # Database Configuration
+        self.database_url = os.getenv('DATABASE_URL')
 
-        # PostgreSQL database configuration
-        self.db_host = None
-        self.db_port = 5432  # Default PostgreSQL port
-        self.db_name = None
-        self.db_user = None
-        self.db_password = None
+        # Bot Configuration
+        self.default_timezone = os.getenv('DEFAULT_TIMEZONE', 'Africa/Lagos')
+        self.default_prompt_time = os.getenv('DEFAULT_PROMPT_TIME', '09:30')
+        self.default_cutoff_time = os.getenv('DEFAULT_CUTOFF_TIME', '12:45')
+        self.default_reminder_time = os.getenv('DEFAULT_REMINDER_TIME', '11:45')
 
-        # Load configuration from file if provided
-        if config_file and os.path.exists(config_file):
-            self._load_from_file(config_file)
+        # Logging Configuration
+        self.log_level = os.getenv('LOG_LEVEL', 'INFO')
 
-        # Override with environment variables if provided
-        self._load_from_env()
+        # Initialize logging
+        self._setup_logging()
 
-        # Validate configuration
+        # Validate required configuration
         self._validate_config()
 
-    def _load_from_file(self, config_file: str) -> None:
-        """Load configuration from a .zuliprc file"""
-        config = configparser.ConfigParser()
-        config.read(config_file)
+    def _setup_logging(self) -> None:
+        """
+        Set up logging configuration.
+        """
+        numeric_level = getattr(logging, self.log_level.upper(), None)
+        if not isinstance(numeric_level, int):
+            numeric_level = logging.INFO
 
-        if 'api' in config:
-            self.email = config['api'].get('email')
-            self.api_key = config['api'].get('key')
-            self.site = config['api'].get('site')
-
-        if 'openai' in config:
-            self.openai_api_key = config['openai'].get('api_key')
-
-        if 'email' in config:
-            self.smtp_server = config['email'].get('smtp_server')
-            self.smtp_port = config['email'].get('smtp_port', '587')
-            self.smtp_username = config['email'].get('smtp_username')
-            self.smtp_password = config['email'].get('smtp_password')
-            self.from_email = config['email'].get('from_email')
-
-        if 'database' in config:
-            self.db_host = config['database'].get('host')
-            self.db_port = config['database'].get('port', '5432')
-            self.db_name = config['database'].get('name')
-            self.db_user = config['database'].get('user')
-            self.db_password = config['database'].get('password')
-
-    def _load_from_env(self) -> None:
-        """Load configuration from environment variables"""
-        # Zulip API credentials
-        if os.environ.get('ZULIP_EMAIL'):
-            self.email = os.environ.get('ZULIP_EMAIL')
-
-        if os.environ.get('ZULIP_API_KEY'):
-            self.api_key = os.environ.get('ZULIP_API_KEY')
-
-        if os.environ.get('ZULIP_SITE'):
-            self.site = os.environ.get('ZULIP_SITE')
-
-        # OpenAI API key
-        if os.environ.get('OPENAI_API_KEY'):
-            self.openai_api_key = os.environ.get('OPENAI_API_KEY')
-
-        # Email configuration
-        if os.environ.get('SMTP_SERVER'):
-            self.smtp_server = os.environ.get('SMTP_SERVER')
-
-        if os.environ.get('SMTP_PORT'):
-            self.smtp_port = os.environ.get('SMTP_PORT')
-
-        if os.environ.get('SMTP_USERNAME'):
-            self.smtp_username = os.environ.get('SMTP_USERNAME')
-
-        if os.environ.get('SMTP_PASSWORD'):
-            self.smtp_password = os.environ.get('SMTP_PASSWORD')
-
-        if os.environ.get('FROM_EMAIL'):
-            self.from_email = os.environ.get('FROM_EMAIL')
-
-        # PostgreSQL configuration
-        if os.environ.get('DB_HOST'):
-            self.db_host = os.environ.get('DB_HOST')
-
-        if os.environ.get('DB_PORT'):
-            self.db_port = os.environ.get('DB_PORT')
-
-        if os.environ.get('DB_NAME'):
-            self.db_name = os.environ.get('DB_NAME')
-
-        if os.environ.get('DB_USER'):
-            self.db_user = os.environ.get('DB_USER')
-
-        if os.environ.get('DB_PASSWORD'):
-            self.db_password = os.environ.get('DB_PASSWORD')
+        logging.basicConfig(
+            level=numeric_level,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
 
     def _validate_config(self) -> None:
-        """Validate that required configuration is present"""
-        if not all([self.email, self.api_key, self.site]):
-            raise ValueError(
-                "Missing required Zulip API credentials. "
-                "Please provide them via .zuliprc file or environment variables "
-                "(ZULIP_EMAIL, ZULIP_API_KEY, ZULIP_SITE)."
-            )
+        """
+        Validate that required configuration is present.
+        """
+        missing_vars = []
 
-    def get_zulip_config(self) -> dict:
-        """Return Zulip API configuration as a dictionary"""
+        # Check for required Zulip configuration
+        if not self.zulip_email:
+            missing_vars.append('ZULIP_EMAIL')
+        if not self.zulip_api_key:
+            missing_vars.append('ZULIP_API_KEY')
+        if not self.zulip_site:
+            missing_vars.append('ZULIP_SITE')
+
+        # Log warnings for missing configuration
+        if missing_vars:
+            logging.warning(f"Missing required environment variables: {', '.join(missing_vars)}")
+
+        # Log warning for missing OpenAI API key
+        if not self.openai_api_key:
+            logging.warning("OPENAI_API_KEY not set. AI summary generation will not be available.")
+
+        # Log warning for missing database URL
+        if not self.database_url:
+            logging.warning("DATABASE_URL not set. Will use in-memory storage instead.")
+
+    def get_bot_config(self) -> Dict[str, Any]:
+        """
+        Get the bot configuration as a dictionary.
+        """
         return {
-            'email': self.email,
-            'api_key': self.api_key,
-            'site': self.site
+            'openai_api_key': self.openai_api_key,
+            'default_timezone': self.default_timezone,
+            'default_prompt_time': self.default_prompt_time,
+            'default_cutoff_time': self.default_cutoff_time,
+            'default_reminder_time': self.default_reminder_time
         }
 
-    def get_email_config(self) -> dict:
-        """Return email configuration as a dictionary"""
+    def get_zulip_config(self) -> Dict[str, str]:
+        """
+        Get the Zulip configuration as a dictionary.
+        """
         return {
-            'smtp_server': self.smtp_server,
-            'smtp_port': self.smtp_port,
-            'smtp_username': self.smtp_username,
-            'smtp_password': self.smtp_password,
-            'from_email': self.from_email
+            'email': self.zulip_email,
+            'api_key': self.zulip_api_key,
+            'site': self.zulip_site
         }
 
-    def get_db_config(self) -> Dict[str, str]:
-        """Return database configuration as a dictionary"""
-        return {
-            'host': self.db_host,
-            'port': self.db_port,
-            'database': self.db_name,
-            'user': self.db_user,
-            'password': self.db_password
-        }
+    def get_database_url(self) -> Optional[str]:
+        """
+        Get the database URL.
+        """
+        return self.database_url
 
-    def is_email_configured(self) -> bool:
-        """Check if email is configured"""
-        return all([
-            self.smtp_server,
-            self.smtp_port,
-            self.smtp_username,
-            self.smtp_password,
-            self.from_email
-        ])
-
-    def is_db_configured(self) -> bool:
-        """Check if database is configured"""
-        return all([
-            self.db_host,
-            self.db_port,
-            self.db_name,
-            self.db_user,
-            self.db_password
-        ])
+# Create a singleton instance
+config = Config()
