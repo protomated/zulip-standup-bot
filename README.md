@@ -187,7 +187,8 @@ This means the Zulip botserver cannot find a bot with the name "standup" in your
 
 3. **Check your Dockerfile**:
    - If using a botserverrc file: `CMD ["zulip-botserver", "--config-file", "/app/botserverrc", "--port", "5002"]`
-   - If using environment variables: `CMD ["zulip-botserver", "--use-env-vars", "--port", "5002"]`
+   - If using environment variables: `CMD ["zulip-botserver", "--use-env-vars", "--bot-name", "standup.py", "--port", "5002"]`
+   - Make sure to include the `--bot-name` argument with the correct bot file name
 
 ### Other Common Issues
 
