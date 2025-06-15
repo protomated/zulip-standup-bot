@@ -13,11 +13,54 @@ To use the Standup Bot, you need to:
 
 ### Configuration
 
-The bot requires the following configuration:
+You have two options for configuring the bot:
 
-- `openai_api_key`: Your OpenAI API key for generating summaries
+#### Option 1: Using Environment Variables (Default)
 
-You can set these in the bot configuration or as environment variables.
+The recommended and default way to configure the bot is using environment variables:
+
+```
+# Zulip Botserver Configuration (required)
+ZULIP_BOTSERVER_CONFIG={"standup": {"email": "standup-bot@your-org.zulipchat.com", "key": "your_bot_api_key", "site": "https://your-org.zulipchat.com", "token": "your-outgoing-webhook-token"}}
+
+# Zulip Configuration (used by the bot code)
+ZULIP_EMAIL=standup-bot@your-org.zulipchat.com
+ZULIP_API_KEY=your_bot_api_key
+ZULIP_SITE=https://your-org.zulipchat.com
+ZULIP_BOT_NAME=Standup Bot
+
+# OpenAI Configuration (optional, for AI summary generation)
+OPENAI_API_KEY=your_openai_api_key
+```
+
+The Dockerfile is configured to explicitly use environment variables:
+```
+CMD ["zulip-botserver", "--use-env-vars", "--port", "5002"]
+```
+
+#### Option 2: Using a botserverrc File (Alternative)
+
+Alternatively, you can use a configuration file named `botserverrc` in the project root:
+
+```
+[standup]
+email=standup-bot@your-org.zulipchat.com
+key=your_bot_api_key
+site=https://your-org.zulipchat.com
+token=your-outgoing-webhook-token
+```
+
+**Important**: 
+- Replace the values with your actual bot credentials
+- Make sure to add `botserverrc` to your `.gitignore` file to avoid committing sensitive information
+- The bot name in brackets `[standup]` must match the name you use in your commands
+
+To use a botserverrc file, you need to modify the Dockerfile to include the `--config-file` parameter:
+```
+CMD ["zulip-botserver", "--config-file", "/app/botserverrc", "--port", "5002"]
+```
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions and additional configuration options.
 
 ## Usage
 
@@ -121,6 +164,36 @@ The bot will send you a private message at the configured prompt time with the f
 - Set standup prompt time per user timezone
 - Set daily cutoff time for response collection
 - Configure reminder timing
+
+## Troubleshooting
+
+### "Bot doesn't exist" Error
+
+If you encounter the error: `Error: Bot "standup" doesn't exist. Please make sure you have set up the botserverrc file correctly.`
+
+This means the Zulip botserver cannot find a bot with the name "standup" in your configuration. To fix this:
+
+1. **Check your botserverrc file**:
+   - Make sure the file exists in the project root
+   - Verify it contains a section with the correct bot name: `[standup]`
+   - Ensure all credentials (email, key, site, token) are correct
+   - The bot name in brackets must match the name you use in your commands
+
+2. **If using environment variables**:
+   - Verify that `ZULIP_BOTSERVER_CONFIG` is correctly formatted as a JSON string
+   - Make sure it contains a key for your bot: `{"standup": {...}}`
+   - Check that the Dockerfile doesn't include the `--config-file` parameter
+   - Ensure the environment variable is properly set in your deployment environment
+
+3. **Check your Dockerfile**:
+   - If using a botserverrc file: `CMD ["zulip-botserver", "--config-file", "/app/botserverrc", "--port", "5002"]`
+   - If using environment variables: `CMD ["zulip-botserver", "--use-env-vars", "--port", "5002"]`
+
+### Other Common Issues
+
+- **Bot not responding**: Make sure the bot is added to the channel and has the correct permissions
+- **Missing AI summaries**: Verify that the OpenAI API key is correctly set
+- **Timezone issues**: Check that users have set their timezones correctly with `/standup timezone`
 
 ## Notes
 
