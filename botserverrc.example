@@ -1,8 +1,0 @@
-# Example botserverrc file for Standup Bot
-# Rename to botserverrc and update with your values
-
-[standup]
-email=standup-bot@your-org.zulipchat.com
-key=your_bot_api_key
-site=https://your-org.zulipchat.com
-token=your-outgoing-webhook-token

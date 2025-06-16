@@ -2,7 +2,7 @@ from zulip_bots.test_lib import BotTestCase, DefaultTests
 
 
 class TestHelpBot(BotTestCase, DefaultTests):
-    bot_name: str = "helloworld"
+    bot_name: str = "standup"
 
     def test_bot(self) -> None:
         dialog = [

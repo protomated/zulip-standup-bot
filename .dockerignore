@@ -23,10 +23,10 @@ var/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# Virtual Environment
+zulip-api-py3-venv/
 venv/
 ENV/
-env/
 
 # IDE files
 .idea/
@@ -34,19 +34,10 @@ env/
 *.swp
 *.swo
 
-# OS specific files
-.DS_Store
-Thumbs.db
-
-# Test files
-test_*.py
-tests/
-
-# Documentation
-docs/
-*.md
-!README.md
-!DEPLOYMENT.md
-
 # Logs
 *.log
+
+# Test files
+.coverage
+htmlcov/
+.pytest_cache/

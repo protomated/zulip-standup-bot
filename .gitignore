@@ -2,7 +2,6 @@
 
 # C extensions
 *.so
-.junie
 
 # Packages
 *.egg
@@ -58,3 +57,5 @@ botserverrc
 # Pycharm
 \.DS_Store
 \.idea/
+.idea
+.env

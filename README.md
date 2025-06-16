@@ -1,11 +1,11 @@
-# Zulip Standup Bot
+# Zulip API
 
 [![Build status](https://github.com/zulip/python-zulip-api/workflows/build/badge.svg)](
 https://github.com/zulip/python-zulip-api/actions?query=branch%3Amain+workflow%3Abuild)
 [![Coverage status](https://img.shields.io/codecov/c/github/zulip/python-zulip-api)](
 https://codecov.io/gh/zulip/python-zulip-api)
 
-This repository contains a Zulip Standup Bot built on top of Zulip's PyPI packages:
+This repository contains the source code for Zulip's PyPI packages:
 
 * `zulip`: [PyPI package](https://pypi.python.org/pypi/zulip/)
   for Zulip's API bindings.
@@ -16,73 +16,31 @@ This repository contains a Zulip Standup Bot built on top of Zulip's PyPI packag
 
 The source code is written in *Python 3*.
 
-## Features
+## Docker Deployment
 
-The Standup Bot helps teams run asynchronous standups in Zulip channels:
+This repository is configured to run in Docker, which makes it easy to deploy to environments like CapRover.
 
-- **Timezone-aware scheduling**: Prompts team members at appropriate times in their local timezone
-- **Flexible configuration**: Customize prompt times, cutoff times, and reminders
-- **AI-powered summaries**: Generates concise summaries of team updates using OpenAI (optional)
-- **Persistent storage**: Stores user preferences and standup responses in a database
+### Local Docker Deployment
 
-### Usage
+To run the botserver locally using Docker:
 
-Once deployed, you can interact with the bot using these commands:
+1. Make sure you have Docker and Docker Compose installed
+2. Clone this repository
+3. Configure your `botserverrc` file with your bot credentials
+4. Run `docker-compose up` to start the botserver
 
-- `/standup setup` - Activate standup for a channel
-- `/standup timezone America/New_York` - Set your timezone
-- `/standup config prompt_time 10:00` - Configure prompt time
-- `/standup help` - Show all available commands
+### CapRover Deployment
 
-## Deployment
+To deploy to CapRover:
 
-### Deploying to CapRover
+1. Make sure your CapRover instance is set up
+2. Configure your `botserverrc` file with your bot credentials
+3. Push this repository to your CapRover instance
+4. CapRover will automatically build and run the Docker image
 
-The Standup Bot can be easily deployed to [CapRover](https://caprover.com/), a free and open-source PaaS.
+The Docker build process includes a provisioning step that installs all required dependencies, including bot-specific requirements. This is similar to running the `tools/provision` script in a local development environment.
 
-#### Configuration Options
-
-You have two options for configuring the bot:
-
-1. **Using Environment Variables** (Recommended for CapRover)
-   - Secure and follows container best practices
-   - Easy to manage through the CapRover dashboard
-   - No need to modify the Dockerfile
-
-2. **Using a Configuration File**
-   - Traditional approach using a `botserverrc` file
-   - Requires modifying the Dockerfile CMD
-   - See [DEPLOYMENT.md](./DEPLOYMENT.md) for details
-
-#### Quick Start with Environment Variables
-
-1. Create a new app in your CapRover dashboard
-2. Set up environment variables for configuration:
-   ```
-   # Zulip Botserver Configuration (required)
-   ZULIP_BOTSERVER_CONFIG={"standup": {"email": "your-bot-email@example.com", "key": "your-api-key", "site": "https://your-zulip-site.com", "token": "your-outgoing-webhook-token"}}
-
-   # Database Configuration (optional, for persistent storage)
-   DATABASE_URL=postgresql://user:password@host:port/database
-
-   # OpenAI Configuration (optional, for AI summary generation)
-   OPENAI_API_KEY=your_openai_api_key
-   ```
-3. Deploy using one of these methods:
-   - GitHub repository
-   - CapRover CLI
-   - Uploading a tar file
-4. **Important**: After deployment, update your Zulip bot's webhook URL:
-   - Go to your Zulip organization settings
-   - Find your bot and click **Edit**
-   - Set the **Endpoint URL** to your CapRover app URL (e.g., `https://standup-bot.your-caprover-domain.com`)
-   - Verify the outgoing webhook token matches the one in your configuration
-5. Verify your deployment:
-   - Add the bot to a channel in Zulip
-   - Send a test message: `/standup help`
-   - The bot should respond with usage instructions
-
-For detailed instructions, including setting up the Zulip bot, configuring port mapping, and troubleshooting, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+The botserver will run with the command `zulip-botserver -c botserverrc` inside the Docker container.
 
 ## Development
 

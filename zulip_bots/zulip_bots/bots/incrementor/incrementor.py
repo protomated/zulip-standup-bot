@@ -40,7 +40,7 @@ class IncrementorHandler:
                 )
 
                 # When there isn't an error while updating the message, we won't
-                 # attempt to send the it again.
+                # attempt to send the it again.
                 if result is None or result.get("result") != "error":
                     return
 

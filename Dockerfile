@@ -1,28 +1,31 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install git for cloning repositories during pip install
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file from the new location
-COPY zulip_bots/zulip_bots/bots/standup/requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy bot code
+# Copy the entire project first
 COPY . .
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
+# Create a temporary requirements file without editable installs
+RUN grep -v "^-e " requirements.txt > requirements_no_editable.txt
 
-# Expose port for the bot server
+# Install dependencies excluding editable packages
+RUN pip install --no-cache-dir -r requirements_no_editable.txt
+
+# Install the packages in development mode
+RUN pip install -e ./zulip
+RUN pip install -e ./zulip_bots
+RUN pip install -e ./zulip_botserver
+
+# Install bot-specific requirements (similar to tools/provision)
+RUN for req_file in $(find zulip_bots/zulip_bots/bots -name "requirements.txt"); do \
+    pip install --no-cache-dir -r $req_file; \
+    done
+
+# Expose the default port
 EXPOSE 5002
 
-# Command to run the bot server
-# Use environment variables for configuration
+# Set the command to run the botserver
 CMD ["zulip-botserver", "--use-env-vars", "--port", "5002"]
