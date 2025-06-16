@@ -60,39 +60,12 @@ class StandupHandler:
 
         # Check if this is a response to a standup prompt
         try:
-            # Define the method inline if it doesn't exist
-            if not hasattr(self, '_is_standup_response'):
-                def _is_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> bool:
-                    """
-                    Check if a message is a response to a standup prompt.
-                    """
-                    # Only consider private messages
-                    if message['type'] != 'private':
-                        return False
-
-                    # Check if the user has an active standup prompt
-                    user_id = message['sender_id']
-                    user_email = message['sender_email']
-
-                    # Get all active standup prompts
-                    active_prompts = self._get_active_standup_prompts(bot_handler)
-
-                    # Check if this user has an active prompt
-                    for prompt in active_prompts:
-                        if user_id in prompt.get('pending_responses', []):
-                            return True
-
-                    return False
-
-                # Attach the method to the instance
-                self._is_standup_response = _is_standup_response.__get__(self, type(self))
-
             if self._is_standup_response(message, bot_handler):
                 self._handle_standup_response(message, bot_handler)
                 return
-        except AttributeError as e:
+        except Exception as e:
             # Log the error but continue processing
-            logging.error(f"AttributeError when checking standup response: {e}")
+            logging.error(f"Error when checking standup response: {e}", exc_info=True)
 
         # Default response for messages that don't match any command
         bot_handler.send_reply(message, self.usage())
@@ -153,20 +126,28 @@ class StandupHandler:
         """
         # Only consider private messages
         if message['type'] != 'private':
+            logging.debug("Message is not a private message, not a standup response")
             return False
 
         # Check if the user has an active standup prompt
         user_id = message['sender_id']
         user_email = message['sender_email']
+        content = message['content'].strip()
+
+        logging.info(f"Checking if message from {user_email} is a standup response: '{content[:50]}...'")
 
         # Get all active standup prompts
         active_prompts = self._get_active_standup_prompts(bot_handler)
+        logging.info(f"Found {len(active_prompts)} active prompts")
 
         # Check if this user has an active prompt
         for prompt in active_prompts:
-            if user_id in prompt.get('pending_responses', []):
+            pending_responses = prompt.get('pending_responses', [])
+            if user_id in pending_responses:
+                logging.info(f"User {user_id} has an active prompt, treating as standup response")
                 return True
 
+        logging.info(f"User {user_id} does not have an active prompt, not a standup response")
         return False
 
     def _handle_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
@@ -177,19 +158,29 @@ class StandupHandler:
         user_email = message['sender_email']
         content = message['content'].strip()
 
+        logging.info(f"Handling standup response from {user_email}: '{content[:50]}...'")
+        logging.info(f"Storage mode: {'Database' if self.use_database else 'In-memory'}")
+
         # Get all active standup prompts
         active_prompts = self._get_active_standup_prompts(bot_handler)
+        logging.info(f"Found {len(active_prompts)} active prompts for user {user_id}")
 
         # Find the prompt this user is responding to
+        found_prompt = False
         for prompt in active_prompts:
-            if user_id in prompt.get('pending_responses', []):
+            pending_responses = prompt.get('pending_responses', [])
+            logging.info(f"Checking prompt for stream {prompt.get('stream_id')} with {len(pending_responses)} pending responses")
+            if user_id in pending_responses:
                 # Store the response
+                found_prompt = True
                 stream_id = prompt['stream_id']
                 standup_date = prompt['date']
+                logging.info(f"Found active prompt for user {user_id} in stream {stream_id} for date {standup_date}")
 
                 if self.use_database:
                     try:
                         # Use database to store response
+                        logging.info(f"Storing response in database for user {user_id} in stream {stream_id}")
                         response = database.create_or_update_standup_response(
                             user_id,
                             stream_id,
@@ -198,68 +189,92 @@ class StandupHandler:
                         )
 
                         # Get the number of responses
-                        num_responses = len(response.get('responses', []))
+                        responses_list = response.get('responses', [])
+                        num_responses = len(responses_list)
+                        logging.info(f"User {user_id} has {num_responses} responses for standup on {standup_date}: {responses_list}")
 
                         # Send follow-up question based on response count
                         if num_responses == 1:
+                            # First response received, send second question
+                            logging.info(f"Sending second question to user {user_id} (database path)")
                             self._send_private_message(
                                 bot_handler,
                                 user_email,
                                 "What are you planning to work on today?"
                             )
+                            logging.info(f"Sent second question to user {user_id}")
                         elif num_responses == 2:
+                            # Second response received, send third question
+                            logging.info(f"Sending third question to user {user_id} (database path)")
                             self._send_private_message(
                                 bot_handler,
                                 user_email,
                                 "Any blockers or issues?"
                             )
+                            logging.info(f"Sent third question to user {user_id}")
                         elif num_responses == 3:
-                            # Thank the user for completing the standup
+                            # Third response received, thank the user
+                            logging.info(f"Sending thank you message to user {user_id} (database path)")
                             self._send_private_message(
                                 bot_handler,
                                 user_email,
                                 "Thanks for completing your standup! Your responses have been recorded."
                             )
+                            logging.info(f"Thanked user {user_id} for completing standup")
 
                             # Remove user from pending responses in database
                             try:
+                                logging.info(f"Removing user {user_id} from pending responses in database")
                                 prompt_data = database.get_standup_prompt(stream_id, standup_date)
                                 if prompt_data and 'pending_responses' in prompt_data:
                                     pending_responses = prompt_data['pending_responses']
                                     if user_id in pending_responses:
                                         pending_responses.remove(user_id)
                                         database.update_standup_prompt(stream_id, standup_date, pending_responses)
+                                        logging.info(f"User {user_id} removed from pending responses in database")
                             except Exception as e:
-                                logging.error(f"Error updating prompt in database: {e}")
+                                logging.error(f"Error updating prompt in database: {e}", exc_info=True)
                     except Exception as e:
-                        logging.error(f"Error storing response in database: {e}")
+                        logging.error(f"Error storing response in database: {e}", exc_info=True)
                         # Fall back to in-memory storage for this response
+                        logging.info(f"Falling back to in-memory storage for user {user_id}")
                         self._handle_response_in_memory(bot_handler, user_id, user_email, stream_id, standup_date,
                                                         content, prompt)
                 else:
                     # Use in-memory storage
+                    logging.info(f"Using in-memory storage for user {user_id}")
                     self._handle_response_in_memory(bot_handler, user_id, user_email, stream_id, standup_date,
                                                     content, prompt)
                 return
 
-        # If we get here, the user doesn't have an active prompt
-        bot_handler.send_reply(message,
-                               "You don't have an active standup prompt. Please wait for the next scheduled standup.")
+        if not found_prompt:
+            logging.warning(f"No active prompt found for user {user_id}")
+            bot_handler.send_reply(message, "You don't have an active standup prompt. Please wait for the next scheduled standup.")
 
     def _handle_response_in_memory(self, bot_handler: AbstractBotHandler, user_id: str, user_email: str,
                                    stream_id: str, standup_date: str, content: str, prompt: Dict[str, Any]) -> None:
         """
         Handle a standup response using in-memory storage.
         """
+        logging.info(f"Handling response in memory for user {user_id} in stream {stream_id}")
+
         # Get existing responses for this user
         storage_key = f"standup_response_{stream_id}_{user_id}_{standup_date}"
+        logging.info(f"Storage key for responses: {storage_key}")
+
         try:
             existing_response = bot_handler.storage.get(storage_key)
+            if existing_response:
+                logging.info(f"Found existing response with {len(existing_response.get('responses', []))} responses")
+            else:
+                logging.info("No existing response found")
         except KeyError:
+            logging.info("No existing response found (KeyError)")
             existing_response = None
 
         if existing_response is None:
             # First response
+            logging.info(f"Creating new response for user {user_id}")
             response_data = {
                 'user_id': user_id,
                 'user_email': user_email,
@@ -271,43 +286,60 @@ class StandupHandler:
 
             # Send follow-up question if this is the first response
             if len(response_data['responses']) == 1:
+                logging.info(f"Sending second question to user {user_id} (in-memory storage)")
                 self._send_private_message(
                     bot_handler,
                     user_email,
                     "What are you planning to work on today?"
                 )
+                logging.info(f"Sent second question to user {user_id} (in-memory storage)")
 
         else:
             # Additional response
+            logging.info(f"Updating existing response for user {user_id}")
             response_data = existing_response
             response_data['responses'].append(content)
             response_data['timestamp'] = time.time()
 
+            num_responses = len(response_data['responses'])
+            logging.info(f"User {user_id} now has {num_responses} responses: {response_data['responses']}")
+
             # Send follow-up question if this is the second response
-            if len(response_data['responses']) == 2:
+            if num_responses == 2:
+                logging.info(f"Sending third question to user {user_id} (in-memory storage)")
                 self._send_private_message(
                     bot_handler,
                     user_email,
                     "Any blockers or issues?"
                 )
-            elif len(response_data['responses']) == 3:
+                logging.info(f"Sent third question to user {user_id} (in-memory storage)")
+            elif num_responses == 3:
                 # Thank the user for completing the standup
+                logging.info(f"Sending thank you message to user {user_id} (in-memory storage)")
                 self._send_private_message(
                     bot_handler,
                     user_email,
                     "Thanks for completing your standup! Your responses have been recorded."
                 )
+                logging.info(f"Thanked user {user_id} for completing standup (in-memory storage)")
 
                 # Remove user from pending responses
-                prompt['pending_responses'].remove(user_id)
-                storage_key_prompt = f"standup_prompt_{stream_id}_{standup_date}"
-                bot_handler.storage.put(storage_key_prompt, prompt)
+                logging.info(f"Removing user {user_id} from pending responses")
+                if user_id in prompt['pending_responses']:
+                    prompt['pending_responses'].remove(user_id)
+                    storage_key_prompt = f"standup_prompt_{stream_id}_{standup_date}"
+                    bot_handler.storage.put(storage_key_prompt, prompt)
+                    logging.info(f"User {user_id} removed from pending responses")
+                else:
+                    logging.warning(f"User {user_id} not found in pending responses")
 
         # Store the response
+        logging.info(f"Storing response for user {user_id} with {len(response_data['responses'])} responses")
         bot_handler.storage.put(storage_key, response_data)
 
         # Register the response key
         self._add_to_registry("response", storage_key)
+        logging.info(f"Response key {storage_key} added to registry")
 
     def _handle_standup_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
         """
@@ -1163,7 +1195,8 @@ Please respond to the standup prompt before {cutoff_time}.
         Get standup responses from in-memory storage.
         """
         response_keys = self._get_registry("response")
-        response_keys = [key for key in response_keys if key.startswith(f"standup_response_{stream_id}_{date}")]
+        # Fix: Match keys with pattern standup_response_{stream_id}_{user_id}_{date}
+        response_keys = [key for key in response_keys if key.startswith(f"standup_response_{stream_id}_") and key.endswith(f"_{date}")]
 
         responses = []
         for key in response_keys:
@@ -1281,6 +1314,7 @@ Standup Responses:
             'content': content
         }
 
+        logging.info(f"Sending private message to {user_email}: {content[:50]}...")
         bot_handler.send_message(message)
 
     def _send_stream_message(self, bot_handler: AbstractBotHandler, stream: str, topic: str, content: str) -> None:
@@ -1339,11 +1373,37 @@ Standup Responses:
         # Get today's date
         today = datetime.datetime.now().strftime('%Y-%m-%d')
 
+        if self.use_database:
+            try:
+                # Use database to get active prompts
+                prompts = []
+                all_prompts = database.get_all_standup_prompts_for_date(today)
+                logging.info(f"Retrieved {len(all_prompts)} prompts from database for date {today}")
+
+                for prompt in all_prompts:
+                    # Convert database prompt to the format expected by the bot
+                    prompt_data = {
+                        'stream_id': prompt.get('zulip_stream_id'),
+                        'stream_name': prompt.get('stream_name'),
+                        'date': today,
+                        'pending_responses': prompt.get('pending_responses', []),
+                        'created_at': prompt.get('created_at', time.time())
+                    }
+                    prompts.append(prompt_data)
+
+                return prompts
+            except Exception as e:
+                logging.error(f"Error retrieving prompts from database: {e}", exc_info=True)
+                # Fall back to in-memory storage
+                logging.info("Falling back to in-memory storage for prompts")
+
+        # Use in-memory storage
         # Get all prompt keys from registry
         prompt_keys = self._get_registry("prompt")
 
         # Filter for today's prompts
         prompt_keys = [key for key in prompt_keys if key.endswith(f"_{today}")]
+        logging.info(f"Found {len(prompt_keys)} prompt keys in registry for date {today}")
 
         # Get the prompt data
         prompts = []
@@ -1356,6 +1416,7 @@ Standup Responses:
                 logging.warning(f"Prompt data not found for key {key}")
                 continue
 
+        logging.info(f"Retrieved {len(prompts)} prompts from in-memory storage")
         return prompts
 
 
