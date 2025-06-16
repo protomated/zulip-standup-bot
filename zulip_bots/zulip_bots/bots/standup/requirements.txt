@@ -1,0 +1,4 @@
+psycopg2-binary>=2.9.3
+apscheduler>=3.9.1
+pytz>=2022.1
+openai>=0.27.0

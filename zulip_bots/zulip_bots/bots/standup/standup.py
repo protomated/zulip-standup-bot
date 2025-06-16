@@ -15,8 +15,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
-from . import database
-from .config import config
+import zulip_bots.bots.standup.database as database
+from zulip_bots.bots.standup.config import config
 
 
 class StandupHandler:
