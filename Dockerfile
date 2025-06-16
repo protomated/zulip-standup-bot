@@ -9,7 +9,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file from the new location
-COPY zulip_bots/bots/standup/requirements.txt .
+COPY zulip_bots/zulip_bots/bots/standup/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
