@@ -60,7 +60,7 @@ class StandupHandler:
 
         # Check if this is a response to a standup prompt
         try:
-            if self._is_standup_response(message, bot_handler):
+            if self.is_standup_response(message, bot_handler):
                 self._handle_standup_response(message, bot_handler)
                 return
         except Exception as e:
@@ -120,7 +120,7 @@ class StandupHandler:
 
         logging.info("Standup bot initialized")
 
-    def _is_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> bool:
+    def is_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> bool:
         """
         Check if a message is a response to a standup prompt.
         """
