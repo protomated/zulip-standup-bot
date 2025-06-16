@@ -8,8 +8,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file
-COPY requirements.txt .
+# Copy requirements file from the new location
+COPY zulip_bots/bots/standup/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -25,4 +25,4 @@ EXPOSE 5002
 
 # Command to run the bot server
 # Explicitly use environment variables and specify the bot file
-CMD ["zulip-botserver", "--use-env-vars", "--bot-name", "standup.py", "--port", "5002"]
+CMD ["zulip-botserver", "--use-env-vars", "--bot-name", "standup", "--port", "5002"]

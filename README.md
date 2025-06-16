@@ -174,7 +174,7 @@ If you encounter the error: `Error: Bot "standup" doesn't exist. Please make sur
 This means the Zulip botserver cannot find a bot with the name "standup" in your configuration. To fix this:
 
 1. **Check your botserverrc file**:
-   - Make sure the file exists in the project root
+   - Make sure the file exists in the project root (not in the zulip_bots/bots/standup/ directory)
    - Verify it contains a section with the correct bot name: `[standup]`
    - Ensure all credentials (email, key, site, token) are correct
    - The bot name in brackets must match the name you use in your commands
@@ -187,8 +187,8 @@ This means the Zulip botserver cannot find a bot with the name "standup" in your
 
 3. **Check your Dockerfile**:
    - If using a botserverrc file: `CMD ["zulip-botserver", "--config-file", "/app/botserverrc", "--port", "5002"]`
-   - If using environment variables: `CMD ["zulip-botserver", "--use-env-vars", "--bot-name", "standup.py", "--port", "5002"]`
-   - Make sure to include the `--bot-name` argument with the correct bot file name
+   - If using environment variables: `CMD ["zulip-botserver", "--use-env-vars", "--bot-name", "standup", "--port", "5002"]`
+   - Make sure to include the `--bot-name` argument with the correct bot name (without the .py extension)
 
 ### Other Common Issues
 

@@ -16,7 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
 
-from zulip_bots.lib import AbstractBotHandler
+from zulip_bots.lib import BotHandler
 
 # Import local modules
 from . import database
@@ -44,7 +44,7 @@ class StandupBotHandler:
         * `/standup help` - Show this help message
         """
 
-    def initialize(self, bot_handler: AbstractBotHandler) -> None:
+    def initialize(self, bot_handler: BotHandler) -> None:
         """
         Initialize the bot with configuration and start the scheduler.
         """
@@ -94,7 +94,7 @@ class StandupBotHandler:
 
         logging.info("Standup bot initialized")
 
-    def handle_message(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
+    def handle_message(self, message: Dict[str, Any], bot_handler: BotHandler) -> None:
         """
         Handle incoming messages and route them to the appropriate handler.
         """
