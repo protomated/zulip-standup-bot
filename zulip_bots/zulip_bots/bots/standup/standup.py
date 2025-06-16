@@ -48,16 +48,54 @@ class StandupHandler:
         # Extract the command from the message
         content = message['content'].strip()
 
-        # Check if this is a response to a standup prompt
-        if self._is_standup_response(message, bot_handler):
-            self._handle_standup_response(message, bot_handler)
-            return
-
+        # Handle /standup commands
         if content.startswith('/standup'):
             self._handle_standup_command(message, bot_handler)
-        else:
-            # Default response for messages that don't match any command
+            return
+
+        # Handle 'help' command
+        if content.lower() == 'help':
             bot_handler.send_reply(message, self.usage())
+            return
+
+        # Check if this is a response to a standup prompt
+        try:
+            # Define the method inline if it doesn't exist
+            if not hasattr(self, '_is_standup_response'):
+                def _is_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> bool:
+                    """
+                    Check if a message is a response to a standup prompt.
+                    """
+                    # Only consider private messages
+                    if message['type'] != 'private':
+                        return False
+
+                    # Check if the user has an active standup prompt
+                    user_id = message['sender_id']
+                    user_email = message['sender_email']
+
+                    # Get all active standup prompts
+                    active_prompts = self._get_active_standup_prompts(bot_handler)
+
+                    # Check if this user has an active prompt
+                    for prompt in active_prompts:
+                        if user_id in prompt.get('pending_responses', []):
+                            return True
+
+                    return False
+
+                # Attach the method to the instance
+                self._is_standup_response = _is_standup_response.__get__(self, type(self))
+
+            if self._is_standup_response(message, bot_handler):
+                self._handle_standup_response(message, bot_handler)
+                return
+        except AttributeError as e:
+            # Log the error but continue processing
+            logging.error(f"AttributeError when checking standup response: {e}")
+
+        # Default response for messages that don't match any command
+        bot_handler.send_reply(message, self.usage())
 
     def initialize(self, bot_handler: AbstractBotHandler) -> None:
         """
