@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.12.6-slim
 
 WORKDIR /app
 
@@ -28,4 +28,4 @@ RUN for req_file in $(find zulip_bots/zulip_bots/bots -name "requirements.txt");
 EXPOSE 5002
 
 # Set the command to run the botserver
-CMD ["zulip-botserver", "--use-env-vars", "--port", "5002"]
+CMD ["zulip-botserver", "--use-env-vars", "--port", "5002", "--host", "0.0.0.0"]
