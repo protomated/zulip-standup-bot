@@ -1,0 +1,21 @@
+name: Deploy to CapRover
+
+on:
+  workflow_run:
+    workflows: ["Publish Docker image"]
+    types:
+      - completed
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Deploy to CapRover
+        uses: caprover/deploy-from-github@v1.1.2
+        with:
+          server: '${{ secrets.CAPROVER_SERVER }}'
+          app: '${{ secrets.CAPROVER_APP }}'
+          token: '${{ secrets.CAPROVER_TOKEN }}'
+          image: 'docker.io/protomated/zulip-standup-bot:latest'
