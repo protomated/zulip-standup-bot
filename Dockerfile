@@ -25,4 +25,4 @@ EXPOSE 5002
 
 # Command to run the bot server
 # Use environment variables for configuration
-CMD ["zulip-botserver", "--use-env-vars", "--bot-name", "standup", "--port", "5002"]
+CMD ["zulip-botserver", "--use-env-vars", "--port", "5002"]
