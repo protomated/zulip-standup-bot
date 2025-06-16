@@ -24,5 +24,5 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5002
 
 # Command to run the bot server
-# Use the botserverrc file for configuration
-CMD ["zulip-botserver", "--config-file", "/app/botserverrc", "--port", "5002"]
+# Use environment variables for configuration
+CMD ["zulip-botserver", "--use-env-vars", "--bot-name", "standup", "--port", "5002"]
