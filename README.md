@@ -38,9 +38,9 @@ The Dockerfile is configured to explicitly use environment variables:
 CMD ["zulip-botserver", "--use-env-vars", "--port", "5002"]
 ```
 
-#### Option 2: Using a botserverrc File (Alternative)
+#### Option 2: Using a botserverrc File (Recommended)
 
-Alternatively, you can use a configuration file named `botserverrc` in the project root:
+The recommended way to configure the bot is using a configuration file named `botserverrc` in the project root:
 
 ```
 [standup]
@@ -50,12 +50,36 @@ site=https://your-org.zulipchat.com
 token=your-outgoing-webhook-token
 ```
 
-**Important**: 
-- Replace the values with your actual bot credentials
-- Make sure to add `botserverrc` to your `.gitignore` file to avoid committing sensitive information
-- The bot name in brackets `[standup]` must match the name you use in your commands
+### Creating a botserverrc File Securely
 
-To use a botserverrc file, you need to modify the Dockerfile to include the `--config-file` parameter:
+To create your botserverrc file without committing sensitive information to the repository:
+
+1. Copy the example file to create your own configuration:
+   ```bash
+   cp botserverrc.example botserverrc
+   ```
+
+2. Edit the `botserverrc` file with your actual bot credentials:
+   ```bash
+   nano botserverrc  # or use any text editor
+   ```
+
+3. Verify that `botserverrc` is listed in your `.gitignore` file to prevent it from being committed:
+   ```bash
+   grep botserverrc .gitignore
+   ```
+
+   If it's not listed, add it:
+   ```bash
+   echo "botserverrc" >> .gitignore
+   ```
+
+**Important**: 
+- The bot name in brackets `[standup]` must match the name you use in your commands
+- Never commit your actual `botserverrc` file with real credentials to the repository
+- When deploying, ensure your `botserverrc` file is securely transferred to the server
+
+The Dockerfile is already configured to use the botserverrc file:
 ```
 CMD ["zulip-botserver", "--config-file", "/app/botserverrc", "--port", "5002"]
 ```
