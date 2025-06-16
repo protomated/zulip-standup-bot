@@ -112,7 +112,7 @@ class StandupBotHandler:
             # Default response for messages that don't match any command
             bot_handler.send_reply(message, self.usage())
 
-    def _is_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> bool:
+    def _is_standup_response(self, message: Dict[str, Any], bot_handler: BotHandler) -> bool:
         """
         Check if a message is a response to a standup prompt.
         """
@@ -134,7 +134,7 @@ class StandupBotHandler:
 
         return False
 
-    def _handle_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
+    def _handle_standup_response(self, message: Dict[str, Any], bot_handler: BotHandler) -> None:
         """
         Handle a response to a standup prompt.
         """
@@ -208,7 +208,7 @@ class StandupBotHandler:
         # If we get here, the user doesn't have an active prompt
         bot_handler.send_reply(message, "You don't have an active standup prompt. Please wait for the next scheduled standup.")
 
-    def _handle_response_in_memory(self, bot_handler: AbstractBotHandler, user_id: str, user_email: str,
+    def _handle_response_in_memory(self, bot_handler: BotHandler, user_id: str, user_email: str,
                                  stream_id: str, standup_date: str, content: str, prompt: Dict[str, Any]) -> None:
         """
         Handle a standup response using in-memory storage.
@@ -271,7 +271,7 @@ class StandupBotHandler:
         # Register the response key
         self._add_to_registry("response", storage_key)
 
-    def _handle_standup_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
+    def _handle_standup_command(self, message: Dict[str, Any], bot_handler: BotHandler) -> None:
         """
         Handle the /standup command and its subcommands.
         """
@@ -301,7 +301,7 @@ class StandupBotHandler:
         else:
             bot_handler.send_reply(message, f"Unknown subcommand: {subcommand}\n\n{self.usage()}")
 
-    def _handle_setup_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler, args: List[str]) -> None:
+    def _handle_setup_command(self, message: Dict[str, Any], bot_handler: BotHandler, args: List[str]) -> None:
         """
         Handle the /standup setup command to activate standup for a channel.
         """
@@ -425,7 +425,7 @@ You can customize these settings with:
         # Schedule the standup
         self._schedule_standup(stream_id, config)
 
-    def _handle_timezone_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler, args: List[str]) -> None:
+    def _handle_timezone_command(self, message: Dict[str, Any], bot_handler: BotHandler, args: List[str]) -> None:
         """
         Handle the /standup timezone command to set a user's timezone.
         """
@@ -470,7 +470,7 @@ You can customize these settings with:
 
         bot_handler.send_reply(message, f"Your timezone has been set to {timezone_str}.")
 
-    def _handle_pause_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
+    def _handle_pause_command(self, message: Dict[str, Any], bot_handler: BotHandler) -> None:
         """
         Handle the /standup pause command to pause standup for a channel.
         """
@@ -530,7 +530,7 @@ You can customize these settings with:
 
         bot_handler.send_reply(message, f"Standup has been paused for {stream_name}.")
 
-    def _handle_resume_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
+    def _handle_resume_command(self, message: Dict[str, Any], bot_handler: BotHandler) -> None:
         """
         Handle the /standup resume command to resume standup for a channel.
         """
@@ -591,7 +591,7 @@ You can customize these settings with:
 
         bot_handler.send_reply(message, f"Standup has been resumed for {stream_name}.")
 
-    def _handle_status_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
+    def _handle_status_command(self, message: Dict[str, Any], bot_handler: BotHandler) -> None:
         """
         Handle the /standup status command to check the status of standup for a channel.
         """
@@ -661,7 +661,7 @@ You can customize these settings with:
 
         bot_handler.send_reply(message, status)
 
-    def _handle_config_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler, args: List[str]) -> None:
+    def _handle_config_command(self, message: Dict[str, Any], bot_handler: BotHandler, args: List[str]) -> None:
         """
         Handle the /standup config command to configure standup settings.
         """
@@ -1225,7 +1225,7 @@ Standup Responses:
 
         return summary
 
-    def _send_private_message(self, bot_handler: AbstractBotHandler, user_email: str, content: str) -> None:
+    def _send_private_message(self, bot_handler: BotHandler, user_email: str, content: str) -> None:
         """
         Send a private message to a user.
         """
@@ -1237,7 +1237,7 @@ Standup Responses:
 
         bot_handler.send_message(message)
 
-    def _send_stream_message(self, bot_handler: AbstractBotHandler, stream: str, topic: str, content: str) -> None:
+    def _send_stream_message(self, bot_handler: BotHandler, stream: str, topic: str, content: str) -> None:
         """
         Send a message to a stream.
         """
@@ -1267,7 +1267,7 @@ Standup Responses:
         except pytz.exceptions.UnknownTimeZoneError:
             return False
 
-    def _get_user_timezone(self, bot_handler: AbstractBotHandler, user_id: str) -> str:
+    def _get_user_timezone(self, bot_handler: BotHandler, user_id: str) -> str:
         """
         Get a user's timezone.
         """
@@ -1286,7 +1286,7 @@ Standup Responses:
 
         return self.config_info.get('default_timezone', 'Africa/Lagos')
 
-    def _get_active_standup_prompts(self, bot_handler: AbstractBotHandler) -> List[Dict[str, Any]]:
+    def _get_active_standup_prompts(self, bot_handler: BotHandler) -> List[Dict[str, Any]]:
         """
         Get all active standup prompts.
         """
