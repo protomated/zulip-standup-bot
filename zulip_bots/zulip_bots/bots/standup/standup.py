@@ -150,6 +150,12 @@ class StandupHandler:
         logging.info(f"User {user_id} does not have an active prompt, not a standup response")
         return False
 
+    def _is_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> bool:
+        """
+        Alias for is_standup_response for backward compatibility.
+        """
+        return self.is_standup_response(message, bot_handler)
+
     def _handle_standup_response(self, message: Dict[str, Any], bot_handler: AbstractBotHandler) -> None:
         """
         Handle a response to a standup prompt.
