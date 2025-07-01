@@ -3,7 +3,11 @@ Zulip Standup Bot - Production Ready Implementation
 Manages asynchronous team standups with automated scheduling.
 """
 
-from zulip_bots.lib import AbstractBotHandler
+# Import lib directly since we're using direct path approach
+import sys
+sys.path.insert(0, '/app/zulip_bots/zulip_bots')
+from lib import AbstractBotHandler
+
 import re
 import os
 import json
@@ -17,9 +21,10 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
 
-import zulip_bots.bots.standup.database as database
-from zulip_bots.bots.standup.config import config
-from zulip_bots.bots.standup.ai_summary import summary_generator
+# Direct imports for local modules
+import database
+import config
+import ai_summary
 
 
 class StandupHandler(AbstractBotHandler):
@@ -71,7 +76,7 @@ class StandupHandler(AbstractBotHandler):
 
             # Load configuration
             self.config_info = bot_handler.get_config_info('standup', True) or {}
-            bot_config = config.get_bot_config()
+            bot_config = config.config.get_bot_config()
             for key, value in bot_config.items():
                 if key not in self.config_info or not self.config_info[key]:
                     self.config_info[key] = value
@@ -1161,8 +1166,8 @@ No standup responses were received today for **{stream_name}**.
                         completed_responses.append(response)
 
                 # Generate summary using AI if available
-                if summary_generator.is_available() and formatted_responses:
-                    summary_content = summary_generator.generate_summary(formatted_responses)
+                if ai_summary.summary_generator.is_available() and formatted_responses:
+                    summary_content = ai_summary.summary_generator.generate_summary(formatted_responses)
                 else:
                     # Manual summary
                     summary_content = self._generate_manual_summary(formatted_responses, today, stream_name, len(responses))
