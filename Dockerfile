@@ -35,17 +35,21 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Create non-root user
-RUN groupadd -r zulipbot && useradd -r -g zulipbot zulipbot
-
 # Set working directory
 WORKDIR /app
 
 # Copy Python packages from builder
-COPY --from=builder /root/.local /home/zulipbot/.local
+COPY --from=builder /root/.local /usr/local
 
 # Copy application code
 COPY . /app/
+
+# Install local packages (zulip_bots and the main package) as root
+RUN pip install --no-cache-dir -e ./zulip_bots/ && \
+    pip install --no-cache-dir -e .
+
+# Create non-root user
+RUN groupadd -r zulipbot && useradd -r -g zulipbot zulipbot
 
 # Create necessary directories and set permissions
 RUN mkdir -p /app/data /app/logs \
@@ -56,9 +60,6 @@ RUN mkdir -p /app/data /app/logs \
 
 # Switch to non-root user
 USER zulipbot
-
-# Update PATH for local packages
-ENV PATH="/home/zulipbot/.local/bin:$PATH"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

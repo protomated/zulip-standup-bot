@@ -10,6 +10,12 @@ echo "🤖 Starting Zulip Standup Bot..."
 mkdir -p /app/data
 mkdir -p /app/logs
 
+# Set default SQLite database path if DATABASE_URL is not set
+if [ -z "${DATABASE_URL:-}" ]; then
+    export DATABASE_URL="sqlite:///app/data/standup.db"
+    echo "📁 Using SQLite database: /app/data/standup.db"
+fi
+
 # Check if running in development mode
 if [ "${LOG_LEVEL}" = "DEBUG" ]; then
     echo "🔧 Running in development mode"

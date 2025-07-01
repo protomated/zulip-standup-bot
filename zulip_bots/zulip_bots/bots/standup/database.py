@@ -22,6 +22,15 @@ def get_db_path() -> str:
     """
     Get the database file path. Uses environment variable or default location.
     """
+    # Check for DATABASE_URL first (if it's SQLite)
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url and database_url.startswith('sqlite:///'):
+        db_path = database_url.replace('sqlite:///', '/')
+        # Ensure directory exists
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        return db_path
+
+    # Check for legacy SQLITE_DB_PATH
     db_path = os.environ.get('SQLITE_DB_PATH')
     if db_path:
         # Ensure directory exists
