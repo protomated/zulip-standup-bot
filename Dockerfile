@@ -55,7 +55,8 @@ RUN mkdir -p /app/data /app/logs \
     && chmod +x /app/setup.sh \
     && chmod +x /app/run_standup_bot.py \
     && chmod +x /app/test_imports.py \
-    && chmod +x /app/init_database.py
+    && chmod +x /app/init_database.py \
+    && chmod +x /app/simple_bot_runner.py
 
 # Install the zulip_bots package
 WORKDIR /app/zulip_bots

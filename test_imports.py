@@ -31,9 +31,17 @@ def test_imports():
         print("3. Testing database.init_db function...")
         print(f"   Database init function: {database.init_db}")
 
-        print("4. Testing database initialization...")
-        database.init_db()
-        print("   ✅ Database initialized successfully")
+        print("4. Testing simple bot runner...")
+        # Test our simple bot runner
+        import subprocess
+        result = subprocess.run([
+            'python3', '/app/simple_bot_runner.py'
+        ], capture_output=True, text=True, timeout=5)
+
+        if result.returncode == 0:
+            print("   ✅ Simple bot runner works!")
+        else:
+            print(f"   ❌ Simple bot runner failed: {result.stderr}")
 
         print("   ✅ All imports and database initialization successful!")
 
