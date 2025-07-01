@@ -6,6 +6,28 @@
 
 A production-ready bot that automates daily team standups in Zulip. Features automated scheduling, AI-powered summaries, multi-timezone support, and robust database persistence.
 
+## 📑 Table of Contents
+
+- [✨ Features](#-features)
+- [🚀 Quick Start](#-quick-start)
+  - [Prerequisites](#1-prerequisites)
+  - [Create Bot Account](#2-create-bot-account)
+  - [Installation Options](#3-installation-options)
+  - [Configuration](#4-configuration)
+  - [Setup in Zulip](#5-setup-in-zulip)
+- [📋 Commands Reference](#-commands-reference)
+- [🔄 How It Works](#-how-it-works)
+- [🏗️ Architecture](#️-architecture)
+- [🐳 Deployment](#-deployment)
+- [⚙️ Configuration Reference](#️-configuration-reference)
+- [🔧 Customization](#-customization)
+- [📊 Monitoring & Maintenance](#-monitoring--maintenance)
+- [🐛 Troubleshooting](#-troubleshooting)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+- [🙏 Acknowledgments](#-acknowledgments)
+- [📞 Support](#-support)
+
 ## ✨ Features
 
 - 🕐 **Automated Scheduling**: Daily prompts, reminders, and summaries with precise timing
@@ -483,7 +505,7 @@ We welcome contributions! Please see our contributing guidelines:
 
 ```bash
 # Fork and clone
-git clone https://github.com/your-username/zulip-standup-bot.git
+git clone https://github.com/protomated/zulip-standup-bot.git
 cd zulip-standup-bot
 
 # Setup development environment
