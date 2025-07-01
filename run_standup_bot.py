@@ -128,31 +128,24 @@ def run_bot_direct():
     print(f"📧 Bot email: {os.getenv('ZULIP_EMAIL')}")
     print(f"🤖 AI summaries: {'✅ Enabled' if os.getenv('GROQ_API_KEY') else '❌ Disabled'}")
 
-    # Build command to run the standup bot using local files
+    # Build command to run the standup bot using local files directly
     cmd = [
-        'python3', '-c',
-        f'''
-import sys
-sys.path.insert(0, "/app/zulip_bots/zulip_bots/bots/standup")
-sys.path.insert(0, "/app/zulip_bots/zulip_bots")
-sys.path.insert(0, "/app")
-
-# Set up arguments for the bot runner
-sys.argv = ["zulip-run-bot", "standup", "--config-file", ".zuliprc"]
-
-# Import and run the bot
-from zulip_bots.run import main
-main()
-        '''
+        'python3', '/app/zulip_bots/zulip_bots/run.py',
+        'standup',
+        '--config-file', '.zuliprc'
     ]
 
     print(f"\n🚀 Starting bot: {' '.join(cmd)}")
     print(f"📝 Logs: Check console output")
     print("-" * 50)
 
+    # Set up environment with correct Python path
+    env = os.environ.copy()
+    env['PYTHONPATH'] = '/app/zulip_bots/zulip_bots/bots/standup:/app/zulip_bots/zulip_bots:/app'
+
     try:
         # Run the bot
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, env=env)
     except KeyboardInterrupt:
         print("\n\n🛑 Bot stopped by user")
         sys.exit(0)
