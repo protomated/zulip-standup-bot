@@ -29,9 +29,8 @@ zulip-api-py*-venv/
 
 # Environment files
 .env
-.env.local
-.env.production
-.env.development
+.env.*
+!.env.example
 
 # Zulip configuration
 zuliprc
