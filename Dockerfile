@@ -26,7 +26,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH="/app:/app/zulip_bots"
+    PYTHONPATH="/app:/app/zulip_bots/zulip_bots"
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \

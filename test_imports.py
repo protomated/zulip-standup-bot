@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the local zulip_bots directory to Python path
-sys.path.insert(0, '/app/zulip_bots')
+sys.path.insert(0, '/app/zulip_bots/zulip_bots')
 sys.path.insert(0, '/app')
 
 def test_imports():
@@ -26,6 +26,14 @@ def test_imports():
         print(f"   ✅ zulip_bots imported successfully from {zulip_bots.__file__}")
 
         print("3. Testing zulip_bots.bots import...")
+        # Debug: Check if the directory exists
+        import os
+        bots_path = '/app/zulip_bots/zulip_bots/bots'
+        print(f"   Checking if {bots_path} exists: {os.path.exists(bots_path)}")
+        if os.path.exists(bots_path):
+            print(f"   Contents: {os.listdir(bots_path)}")
+
+        # Try the import
         import zulip_bots.bots
         print("   ✅ zulip_bots.bots imported successfully")
 

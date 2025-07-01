@@ -13,7 +13,7 @@ import time
 import json
 
 # Add the local zulip_bots directory to Python path
-sys.path.insert(0, '/app/zulip_bots')
+sys.path.insert(0, '/app/zulip_bots/zulip_bots')
 sys.path.insert(0, '/app')
 
 def setup_logging():
