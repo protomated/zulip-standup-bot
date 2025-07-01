@@ -26,11 +26,11 @@ def test_imports():
         print(f"   ✅ zulip_bots imported successfully from {zulip_bots.__file__}")
 
         print("3. Testing zulip_bots.bots import...")
-        from zulip_bots import bots
+        import zulip_bots.bots
         print("   ✅ zulip_bots.bots imported successfully")
 
         print("4. Testing zulip_bots.bots.standup import...")
-        from zulip_bots.bots import standup
+        import zulip_bots.bots.standup
         print("   ✅ zulip_bots.bots.standup imported successfully")
 
         print("5. Testing zulip_bots.bots.standup.database import...")
