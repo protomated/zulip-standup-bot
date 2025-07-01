@@ -128,11 +128,22 @@ def run_bot_direct():
     print(f"📧 Bot email: {os.getenv('ZULIP_EMAIL')}")
     print(f"🤖 AI summaries: {'✅ Enabled' if os.getenv('GROQ_API_KEY') else '❌ Disabled'}")
 
-    # Build command to run the standup bot directly
+    # Build command to run the standup bot using local files
     cmd = [
-        bot_runner_path,
-        'zulip_bots.bots.standup.standup',
-        '--config-file', '.zuliprc'
+        'python3', '-c',
+        f'''
+import sys
+sys.path.insert(0, "/app/zulip_bots/zulip_bots/bots/standup")
+sys.path.insert(0, "/app/zulip_bots/zulip_bots")
+sys.path.insert(0, "/app")
+
+# Set up arguments for the bot runner
+sys.argv = ["zulip-run-bot", "standup", "--config-file", ".zuliprc"]
+
+# Import and run the bot
+from zulip_bots.run import main
+main()
+        '''
     ]
 
     print(f"\n🚀 Starting bot: {' '.join(cmd)}")
