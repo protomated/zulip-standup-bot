@@ -90,7 +90,7 @@ fi
 
 # Test module imports
 echo "🧪 Testing module imports..."
-export PYTHONPATH="/app:/app/zulip_bots/zulip_bots:${PYTHONPATH}"
+export PYTHONPATH="/app/zulip_bots/zulip_bots/bots/standup:/app/zulip_bots/zulip_bots:/app:${PYTHONPATH}"
 python3 /app/test_imports.py
 
 if [ $? -ne 0 ]; then
@@ -173,7 +173,7 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # Start the bot in background so we can handle signals
-export PYTHONPATH="/app:/app/zulip_bots/zulip_bots:${PYTHONPATH}"
+export PYTHONPATH="/app/zulip_bots/zulip_bots/bots/standup:/app/zulip_bots/zulip_bots:/app:${PYTHONPATH}"
 python3 /app/run_standup_bot.py &
 BOT_PID=$!
 

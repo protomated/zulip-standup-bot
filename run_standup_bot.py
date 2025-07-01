@@ -12,7 +12,8 @@ from pathlib import Path
 import time
 import json
 
-# Add the local zulip_bots directory to Python path
+# Add the local paths first to override installed packages
+sys.path.insert(0, '/app/zulip_bots/zulip_bots/bots/standup')
 sys.path.insert(0, '/app/zulip_bots/zulip_bots')
 sys.path.insert(0, '/app')
 

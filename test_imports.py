@@ -6,7 +6,8 @@ Test script to verify that all required modules can be imported.
 import sys
 import os
 
-# Add the local zulip_bots directory to Python path
+# Add the local paths first to override installed packages
+sys.path.insert(0, '/app/zulip_bots/zulip_bots/bots/standup')
 sys.path.insert(0, '/app/zulip_bots/zulip_bots')
 sys.path.insert(0, '/app')
 
@@ -21,32 +22,20 @@ def test_imports():
         import zulip
         print("   ✅ zulip imported successfully")
 
-        print("2. Testing zulip_bots import...")
-        import zulip_bots
-        print(f"   ✅ zulip_bots imported successfully from {zulip_bots.__file__}")
+        print("2. Testing direct database import...")
+        # Import the database module directly
+        import database
+        print("   ✅ database module imported successfully")
+        print(f"   Database module from: {database.__file__}")
 
-        print("3. Testing zulip_bots.bots import...")
-        # Debug: Check if the directory exists
-        bots_path = '/app/zulip_bots/zulip_bots/bots'
-        print(f"   Checking if {bots_path} exists: {os.path.exists(bots_path)}")
-        if os.path.exists(bots_path):
-            print(f"   Contents: {os.listdir(bots_path)}")
-
-        # Try the import
-        import zulip_bots.bots
-        print("   ✅ zulip_bots.bots imported successfully")
-
-        print("4. Testing zulip_bots.bots.standup import...")
-        import zulip_bots.bots.standup
-        print("   ✅ zulip_bots.bots.standup imported successfully")
-
-        print("5. Testing zulip_bots.bots.standup.database import...")
-        from zulip_bots.bots.standup import database
-        print("   ✅ zulip_bots.bots.standup.database imported successfully")
-
-        print("6. Testing database.init_db function...")
+        print("3. Testing database.init_db function...")
         print(f"   Database init function: {database.init_db}")
-        print("   ✅ All imports successful!")
+
+        print("4. Testing database initialization...")
+        database.init_db()
+        print("   ✅ Database initialized successfully")
+
+        print("   ✅ All imports and database initialization successful!")
 
         return True
 
@@ -65,9 +54,15 @@ def test_imports():
         for path in sys.path:
             print(f"  {path}")
 
+        # Check if we can find the database file directly
+        db_file = '/app/zulip_bots/zulip_bots/bots/standup/database.py'
+        print(f"\nChecking if database.py exists at {db_file}: {os.path.exists(db_file)}")
+
         return False
     except Exception as e:
         print(f"   ❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 if __name__ == "__main__":
