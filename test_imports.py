@@ -27,7 +27,6 @@ def test_imports():
 
         print("3. Testing zulip_bots.bots import...")
         # Debug: Check if the directory exists
-        import os
         bots_path = '/app/zulip_bots/zulip_bots/bots'
         print(f"   Checking if {bots_path} exists: {os.path.exists(bots_path)}")
         if os.path.exists(bots_path):
