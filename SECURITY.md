@@ -19,7 +19,7 @@ We take security seriously. If you discover a security vulnerability, please fol
 
 Instead, please report security vulnerabilities by:
 
-1. **Email**: Send details to security@your-domain.com
+1. **Email**: Send details to ask@protomated.com
 2. **Private GitHub Security Advisory**: Use GitHub's private vulnerability reporting
 3. **Encrypted Communication**: Use our PGP key if you prefer encrypted communication
 
@@ -169,7 +169,7 @@ We maintain a record of security vulnerabilities and their resolutions:
 
 For security-related questions or concerns:
 
-- **Email**: security@your-domain.com
+- **Email**: ask@protomated.com
 - **Security Advisories**: [GitHub Security Advisories](https://github.com/your-org/zulip-standup-bot/security/advisories)
 - **General Support**: [GitHub Issues](https://github.com/your-org/zulip-standup-bot/issues) (for non-security issues only)
 
