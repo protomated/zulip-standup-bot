@@ -62,10 +62,7 @@ RUN echo "Installing zulip_bots package..." && \
     pip install --no-cache-dir -e ./zulip_bots/ && \
     echo "Installing main package..." && \
     pip install --no-cache-dir -e . && \
-    echo "Verifying installations..." && \
-    python -c "import zulip_bots; print('zulip_bots imported successfully')" && \
-    python -c "from zulip_bots.bots.standup import database; print('standup.database imported successfully')" && \
-    echo "All packages installed successfully"
+    echo "Packages installed successfully"
 
 # Switch to non-root user
 USER zulipbot

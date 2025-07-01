@@ -173,6 +173,7 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # Start the bot in background so we can handle signals
+export PYTHONPATH="/app:/app/zulip_bots:${PYTHONPATH}"
 python3 /app/run_standup_bot.py &
 BOT_PID=$!
 

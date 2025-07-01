@@ -1,0 +1,8 @@
+include README.md
+recursive-include zulip_bots *.py
+recursive-include zulip_bots *.md
+recursive-include zulip_bots *.conf
+recursive-include zulip_bots *.txt
+recursive-include zulip_bots *.json
+recursive-include zulip_bots/bots *
+include zulip_bots/py.typed
