@@ -1,0 +1,47 @@
+version: '3.8'
+
+# Simple development setup with SQLite
+services:
+  standup-bot:
+    build: .
+    container_name: zulip-standup-bot-dev
+    environment:
+      # Zulip Configuration (required)
+      - ZULIP_EMAIL=${ZULIP_EMAIL}
+      - ZULIP_API_KEY=${ZULIP_API_KEY}
+      - ZULIP_SITE=${ZULIP_SITE}
+
+      # Use SQLite for development
+      - SQLITE_DB_PATH=/app/data/standup.db
+
+      # AI Configuration (optional)
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+      # Bot Behavior Configuration
+      - DEFAULT_TIMEZONE=${DEFAULT_TIMEZONE:-America/New_York}
+      - DEFAULT_PROMPT_TIME=${DEFAULT_PROMPT_TIME:-09:30}
+      - DEFAULT_REMINDER_TIME=${DEFAULT_REMINDER_TIME:-11:45}
+      - DEFAULT_CUTOFF_TIME=${DEFAULT_CUTOFF_TIME:-12:45}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+
+      # Development flags
+      - DOCKER_ENV=true
+
+    ports:
+      - "5002:5002"  # Health check endpoint
+
+    volumes:
+      # Mount data directory for SQLite database
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

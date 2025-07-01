@@ -1,0 +1,45 @@
+[Unit]
+Description=Zulip Standup Bot
+Documentation=https://github.com/your-org/zulip-standup-bot
+After=network.target postgresql.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=zulipbot
+Group=zulipbot
+WorkingDirectory=/opt/zulip-standup-bot
+ExecStart=/opt/zulip-standup-bot/venv/bin/python /opt/zulip-standup-bot/run_standup_bot.py
+Restart=always
+RestartSec=10
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/zulip-standup-bot/.env
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/zulip-standup-bot/data
+ReadWritePaths=/opt/zulip-standup-bot/logs
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zulip-standup-bot
+
+[Install]
+WantedBy=multi-user.target

@@ -1,31 +1,82 @@
-FROM python:3.12.6-slim
+# Multi-stage Dockerfile for Zulip Standup Bot
+# Production-ready with security and performance optimizations
 
+# Build stage
+FROM python:3.11-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create build directory
+WORKDIR /build
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Production stage
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    netcat-openbsd \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN groupadd -r zulipbot && useradd -r -g zulipbot zulipbot
+
+# Set working directory
 WORKDIR /app
 
-# Install git for cloning repositories during pip install
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Copy Python packages from builder
+COPY --from=builder /root/.local /home/zulipbot/.local
 
-# Copy the entire project first
-COPY . .
+# Copy application code
+COPY . /app/
 
-# Create a temporary requirements file without editable installs
-RUN grep -v "^-e " requirements.txt > requirements_no_editable.txt
+# Create necessary directories and set permissions
+RUN mkdir -p /app/data /app/logs \
+    && chown -R zulipbot:zulipbot /app \
+    && chmod +x /app/scripts/start.sh \
+    && chmod +x /app/setup.sh \
+    && chmod +x /app/run_standup_bot.py
 
-# Install dependencies excluding editable packages
-RUN pip install --no-cache-dir -r requirements_no_editable.txt
+# Switch to non-root user
+USER zulipbot
 
-# Install the packages in development mode
-RUN pip install -e ./zulip
-RUN pip install -e ./zulip_bots
-RUN pip install -e ./zulip_botserver
+# Update PATH for local packages
+ENV PATH="/home/zulipbot/.local/bin:$PATH"
 
-# Install bot-specific requirements (similar to tools/provision)
-RUN for req_file in $(find zulip_bots/zulip_bots/bots -name "requirements.txt"); do \
-    pip install --no-cache-dir -r $req_file; \
-    done
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5002/health || exit 1
 
-# Expose the default port
+# Expose health check port
 EXPOSE 5002
 
-# Set the command to run the botserver
-CMD ["zulip-botserver", "--use-env-vars", "--port", "5002", "--host", "0.0.0.0"]
+# Set the entrypoint
+ENTRYPOINT ["/app/scripts/start.sh"]
+
+# Labels for metadata
+LABEL maintainer="Protomated <ask@protomated.com>" \
+      description="Zulip Standup Bot - Automated team standups for Zulip" \
+      version="1.0.0" \
+      org.opencontainers.image.title="Zulip Standup Bot" \
+      org.opencontainers.image.description="Production-ready bot for automating daily team standups in Zulip" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.vendor="Protomated" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/protomated/zulip-standup-bot"

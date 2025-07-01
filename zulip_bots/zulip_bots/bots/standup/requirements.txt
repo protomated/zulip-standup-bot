@@ -1,4 +1,4 @@
-psycopg2-binary>=2.9.3
-apscheduler>=3.9.1
-pytz>=2022.1
-openai>=0.27.0
+# Core dependencies for the standup bot
+APScheduler==3.10.4
+pytz>=2023.3
+requests>=2.31.0
