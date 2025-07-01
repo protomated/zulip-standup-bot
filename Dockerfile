@@ -25,7 +25,8 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH="/app:/app/zulip_bots"
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -44,10 +45,6 @@ COPY --from=builder /root/.local /usr/local
 # Copy application code
 COPY . /app/
 
-# Install local packages (zulip_bots and the main package) as root
-RUN pip install --no-cache-dir -e ./zulip_bots/ && \
-    pip install --no-cache-dir -e .
-
 # Create non-root user
 RUN groupadd -r zulipbot && useradd -r -g zulipbot zulipbot
 
@@ -56,7 +53,19 @@ RUN mkdir -p /app/data /app/logs \
     && chown -R zulipbot:zulipbot /app \
     && chmod +x /app/scripts/start.sh \
     && chmod +x /app/setup.sh \
-    && chmod +x /app/run_standup_bot.py
+    && chmod +x /app/run_standup_bot.py \
+    && chmod +x /app/test_imports.py \
+    && chmod +x /app/init_database.py
+
+# Install local packages (zulip_bots and the main package) as root after copying files
+RUN echo "Installing zulip_bots package..." && \
+    pip install --no-cache-dir -e ./zulip_bots/ && \
+    echo "Installing main package..." && \
+    pip install --no-cache-dir -e . && \
+    echo "Verifying installations..." && \
+    python -c "import zulip_bots; print('zulip_bots imported successfully')" && \
+    python -c "from zulip_bots.bots.standup import database; print('standup.database imported successfully')" && \
+    echo "All packages installed successfully"
 
 # Switch to non-root user
 USER zulipbot

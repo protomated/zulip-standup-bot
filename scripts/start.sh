@@ -88,21 +88,21 @@ else
     exit 1
 fi
 
-# Initialize database if needed
-echo "🗄️ Initializing database..."
-python3 -c "
-import sys
-sys.path.insert(0, '/app')
-try:
-    from zulip_bots.bots.standup import database
-    database.init_db()
-    print('✅ Database initialized successfully')
-except Exception as e:
-    print(f'❌ Database initialization failed: {e}')
-    exit(1)
-"
+# Test module imports
+echo "🧪 Testing module imports..."
+export PYTHONPATH="/app:${PYTHONPATH}"
+python3 /app/test_imports.py
 
 if [ $? -ne 0 ]; then
+    echo "⚠️ Module import test failed, but continuing with standalone database initialization..."
+fi
+
+# Initialize database using standalone script
+echo "🗄️ Initializing database..."
+python3 /app/init_database.py
+
+if [ $? -ne 0 ]; then
+    echo "❌ Database initialization failed"
     exit 1
 fi
 
