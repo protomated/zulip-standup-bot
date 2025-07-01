@@ -57,12 +57,9 @@ RUN mkdir -p /app/data /app/logs \
     && chmod +x /app/test_imports.py \
     && chmod +x /app/init_database.py
 
-# Install local packages (zulip_bots and the main package) as root after copying files
-RUN echo "Installing zulip_bots package..." && \
-    pip install --no-cache-dir -e ./zulip_bots/ && \
-    echo "Installing main package..." && \
-    pip install --no-cache-dir -e . && \
-    echo "Packages installed successfully"
+# Note: We rely on PYTHONPATH for module discovery instead of package installation
+# The local zulip_bots directory will be accessible via PYTHONPATH
+RUN echo "Skipping package installation - using PYTHONPATH approach"
 
 # Switch to non-root user
 USER zulipbot
