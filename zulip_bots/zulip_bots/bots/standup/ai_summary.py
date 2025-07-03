@@ -9,19 +9,19 @@ class GroqSummaryGenerator:
     """
     AI Summary generator using Groq API for fast, cheap LLM inference.
     """
-    
+
     def __init__(self):
         self.api_key = os.getenv('GROQ_API_KEY')
         self.api_base = "https://api.groq.com/openai/v1"
         self.model = os.getenv('GROQ_MODEL', 'llama-3.1-8b-instant')  # Fast, cheap model
-        
+
         if not self.api_key:
             logging.warning("GROQ_API_KEY not set. AI summary generation will not be available.")
-    
+
     def is_available(self) -> bool:
         """Check if AI summary generation is available."""
         return bool(self.api_key)
-    
+
     def generate_summary(self, responses: List[Dict[str, str]]) -> str:
         """
         Generate an AI summary of standup responses using Groq.
@@ -36,7 +36,7 @@ class GroqSummaryGenerator:
         try:
             # Format the responses for the prompt
             formatted_responses = json.dumps(responses, indent=2)
-            
+
             # Create the prompt optimized for Llama
             prompt = f"""You are an assistant that creates concise team standup summaries.
 
@@ -47,6 +47,38 @@ Analyze these standup responses and create a brief summary with:
 
 Keep it concise and highlight important items. Use bullet points for clarity.
 
+Here's an example of a response:
+```
+##### Key Work Completed Yesterday:
+* **User**:
+
+  * Summary 1
+
+  * Summary 2
+
+* **Another User**:
+
+  * Summary 1
+
+  * Summary 2
+
+##### Today's Planned Work:
+* **User**:
+
+  * Summary 1
+
+  * Summary 2
+
+* **Another User**:
+
+  * Summary 1
+
+  * Summary 2
+
+##### Blockers:
+* **User**: Blocker Summary
+```
+
 Standup Responses:
 {formatted_responses}
 
@@ -54,7 +86,7 @@ Summary:"""
 
             # Call the Groq API
             response = self._call_groq_api(prompt)
-            
+
             if response:
                 return response
             else:
@@ -64,7 +96,7 @@ Summary:"""
         except Exception as e:
             logging.error(f"Error generating AI summary with Groq: {e}")
             return self._generate_manual_summary(responses)
-    
+
     def _call_groq_api(self, prompt: str) -> Optional[str]:
         """
         Make a request to the Groq API.
@@ -74,7 +106,7 @@ Summary:"""
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            
+
             payload = {
                 "model": self.model,
                 "messages": [
@@ -92,31 +124,31 @@ Summary:"""
                 "top_p": 1,
                 "stream": False
             }
-            
+
             response = requests.post(
                 f"{self.api_base}/chat/completions",
                 headers=headers,
                 json=payload,
                 timeout=30
             )
-            
+
             response.raise_for_status()
-            
+
             result = response.json()
-            
+
             if 'choices' in result and len(result['choices']) > 0:
                 return result['choices'][0]['message']['content'].strip()
             else:
                 logging.error(f"Unexpected Groq API response format: {result}")
                 return None
-                
+
         except requests.exceptions.RequestException as e:
             logging.error(f"Network error calling Groq API: {e}")
             return None
         except Exception as e:
             logging.error(f"Error parsing Groq API response: {e}")
             return None
-    
+
     def _generate_manual_summary(self, responses: List[Dict[str, str]]) -> str:
         """
         Generate a manual summary when AI is not available.
@@ -145,7 +177,7 @@ Summary:"""
 
         # Add blockers section if any exist
         blockers_exist = any(
-            response.get('blockers', 'None').lower() not in ['none', 'no', 'n/a', ''] 
+            response.get('blockers', 'None').lower() not in ['none', 'no', 'n/a', '']
             for response in responses
         )
 
