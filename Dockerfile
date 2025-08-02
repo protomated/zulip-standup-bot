@@ -51,12 +51,8 @@ RUN groupadd -r zulipbot && useradd -r -g zulipbot zulipbot
 # Create necessary directories and set permissions
 RUN mkdir -p /app/data /app/logs \
     && chown -R zulipbot:zulipbot /app \
-    && chmod +x /app/scripts/start.sh \
-    && chmod +x /app/setup.sh \
-    && chmod +x /app/run_standup_bot.py \
-    && chmod +x /app/test_imports.py \
-    && chmod +x /app/init_database.py \
-    && chmod +x /app/simple_bot_runner.py
+    && find /app -name "*.py" -type f -exec chmod +x {} \; \
+    && find /app -name "*.sh" -type f -exec chmod +x {} \;
 
 # Install the zulip_bots package
 WORKDIR /app/zulip_bots
