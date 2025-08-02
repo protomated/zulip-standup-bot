@@ -58,6 +58,9 @@ class StandupHandler(AbstractBotHandler):
         • `/standup config reminder_time HH:MM` - When to send reminders
         • `/standup config cutoff_time HH:MM` - When to post summary
         • `/standup config times HH:MM HH:MM HH:MM` - Set all times at once
+        • `/standup config days weekdays` - Set which days to run standups
+        • `/standup config holidays Nigeria/US` - Set holiday country
+        • `/standup config skip_holidays true/false` - Enable/disable holiday skipping
 
         **Utilities:**
         • `/standup history [days]` - View recent standup history
@@ -353,6 +356,9 @@ class StandupHandler(AbstractBotHandler):
                 'cutoff_time': cutoff_time,
                 'reminder_time': reminder_time,
                 'timezone': 'Africa/Lagos',
+                'days': 'mon,tue,wed,thu,fri',  # Default to weekdays
+                'holiday_country': 'Nigeria',  # Default to Nigeria
+                'skip_holidays': True,  # Skip holidays by default
                 'is_active': True
             }
 
@@ -382,6 +388,7 @@ class StandupHandler(AbstractBotHandler):
 🎉 **Standup activated for {stream_name}!**
 
 **⏰ Schedule:**
+• **Days:** Weekdays (Mon-Fri)
 • **Prompt:** {prompt_time} UTC (questions sent to team)
 • **Reminder:** {reminder_time} UTC (for non-responders)
 • **Summary:** {cutoff_time} UTC (posted to channel)
@@ -390,14 +397,18 @@ class StandupHandler(AbstractBotHandler):
 {participant_list}
 
 **🚀 What happens next:**
-• Daily prompts will be sent automatically
+• Daily prompts will be sent automatically on weekdays
 • Team members respond via private message
 • AI-powered summary posted to this channel
 
 **💡 Customize:**
 • `/standup timezone <your_timezone>` - Set personal timezone
 • `/standup config times HH:MM HH:MM HH:MM` - Adjust schedule
+• `/standup config days all` - Run every day including weekends
+• `/standup config holidays US` - Change holiday country
 • `/standup status` - Check configuration anytime
+
+**🎉 Holiday Support:** Automatically skips Nigerian holidays by default!
 
 Ready to go! 🎯
 """)
@@ -432,6 +443,16 @@ Ready to go! 🎯
             # Calculate next run times
             timezone = channel.get('timezone', 'Africa/Lagos')
             next_times = self._calculate_next_run_times(channel, timezone)
+            
+            # Format days for display
+            days_config = channel.get('days', 'mon,tue,wed,thu,fri')
+            parsed_days = self._parse_days_config(days_config)
+            days_display = self._format_days_display(parsed_days)
+            
+            # Holiday configuration
+            holiday_country = channel.get('holiday_country', 'Nigeria')
+            skip_holidays = channel.get('skip_holidays', True)
+            holiday_status = "✅ Enabled" if skip_holidays else "❌ Disabled"
 
             # Build status message
             is_active = channel.get('is_active', False)
@@ -443,6 +464,9 @@ Ready to go! 🎯
 **📊 Configuration:**
 • Status: {status_icon} {'Active' if is_active else 'Paused'}
 • Timezone: {timezone}
+• Days: {days_display}
+• Holiday Country: {holiday_country}
+• Skip Holidays: {holiday_status}
 • Participants: {len(participants)} members
 
 **⏰ Schedule (UTC):**
@@ -456,6 +480,8 @@ Ready to go! 🎯
 **🔧 Management:**
 • `/standup pause` - Pause standups
 • `/standup config times HH:MM HH:MM HH:MM` - Change schedule
+• `/standup config days weekdays` - Change days
+• `/standup config holidays US` - Change holiday country
 • `/standup debug` - Technical details
 """
 
@@ -468,6 +494,7 @@ Ready to go! 🎯
     def _handle_debug_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler, args: List[str]) -> None:
         """Show debugging information."""
         try:
+            import datetime
             now = datetime.datetime.now(pytz.UTC)
 
             # Get scheduler info
@@ -510,7 +537,16 @@ Ready to go! 🎯
             for channel in active_channels[:5]:  # Show first 5 channels
                 stream_name = channel.get('stream_name', 'Unknown')
                 prompt_time = channel.get('prompt_time', 'N/A')
-                debug_msg += f"• **{stream_name}**: Prompt at {prompt_time} UTC\n"
+                holiday_country = channel.get('holiday_country', 'Nigeria')
+                skip_holidays = channel.get('skip_holidays', True)
+                
+                # Check if today is a holiday
+                import datetime
+                today = datetime.date.today()
+                is_holiday_today = self._is_holiday(today, holiday_country) if skip_holidays else False
+                holiday_indicator = " 🎉" if is_holiday_today else ""
+                
+                debug_msg += f"• **{stream_name}**: Prompt at {prompt_time} UTC, Holidays: {holiday_country}{holiday_indicator}\n"
 
             if len(active_channels) > 5:
                 debug_msg += f"• ... and {len(active_channels) - 5} more channels\n"
@@ -657,8 +693,15 @@ Ready to go! 🎯
 • `/standup config reminder_time HH:MM` - When to send reminders
 • `/standup config cutoff_time HH:MM` - When to post summary
 • `/standup config times HH:MM HH:MM HH:MM` - Set all times at once
+• `/standup config days mon,tue,wed,thu,fri` - Set which days to run
+• `/standup config holidays Nigeria` - Set holiday country (Nigeria, US)
+• `/standup config skip_holidays true/false` - Enable/disable holiday skipping
 
-**Example:** `/standup config times 09:30 11:45 13:00`
+**Examples:**
+• `/standup config times 09:30 11:45 13:00`
+• `/standup config days weekdays` - Monday to Friday only
+• `/standup config holidays US` - Use US holidays
+• `/standup config skip_holidays false` - Run on holidays too
 """)
             return
 
@@ -715,6 +758,89 @@ Ready to go! 🎯
 
                 option_name = option.replace('_', ' ').title()
                 bot_handler.send_reply(message, f"✅ {option_name} set to **{time_value} UTC**")
+
+            elif option == 'days' and len(args) == 2:
+                # Set days configuration
+                days_value = args[1]
+
+                if not self._validate_days_config(days_value):
+                    bot_handler.send_reply(message, f"""❌ Invalid days format: {days_value}
+
+**Valid formats:**
+• `weekdays` - Monday to Friday
+• `weekend` - Saturday and Sunday  
+• `all` - Every day
+• `mon,tue,wed,thu,fri` - Specific days
+• `1,2,3,4,5` - Numeric format (0=Monday)""")
+                    return
+
+                # Parse and format for display
+                parsed_days = self._parse_days_config(days_value)
+                days_display = self._format_days_display(parsed_days)
+
+                database.update_channel(stream_id, {'days': days_value})
+                self._reschedule_standup_for_channel(stream_id)
+
+                bot_handler.send_reply(message, f"✅ Standup days set to **{days_display}**")
+
+            elif option == 'holidays' and len(args) == 2:
+                # Set holiday country
+                country_value = args[1]
+                supported_countries = self._get_supported_countries()
+                
+                # Check if the country is supported
+                country_lower = country_value.lower()
+                valid_country = None
+                for supported in supported_countries:
+                    if country_lower == supported.lower():
+                        valid_country = supported
+                        break
+                
+                if not valid_country:
+                    bot_handler.send_reply(message, f"""❌ Unsupported holiday country: {country_value}
+
+**Supported countries:**
+• Nigeria (ng)
+• United States (US, USA)
+
+**Example:** `/standup config holidays US`""")
+                    return
+
+                # Normalize the country name
+                if valid_country.lower() in ['us', 'usa', 'united states']:
+                    normalized_country = 'United States'
+                else:
+                    normalized_country = 'Nigeria'
+
+                database.update_channel(stream_id, {'holiday_country': normalized_country})
+                self._reschedule_standup_for_channel(stream_id)
+
+                bot_handler.send_reply(message, f"✅ Holiday country set to **{normalized_country}**")
+
+            elif option == 'skip_holidays' and len(args) == 2:
+                # Set skip holidays flag
+                skip_value = args[1].lower()
+                
+                if skip_value in ['true', 'yes', 'on', '1', 'enable']:
+                    skip_holidays = True
+                    skip_text = "enabled"
+                elif skip_value in ['false', 'no', 'off', '0', 'disable']:
+                    skip_holidays = False
+                    skip_text = "disabled"
+                else:
+                    bot_handler.send_reply(message, f"""❌ Invalid value: {args[1]}
+
+**Valid values:**
+• `true`, `yes`, `on`, `1`, `enable` - Skip holidays
+• `false`, `no`, `off`, `0`, `disable` - Run on holidays
+
+**Example:** `/standup config skip_holidays true`""")
+                    return
+
+                database.update_channel(stream_id, {'skip_holidays': skip_holidays})
+                self._reschedule_standup_for_channel(stream_id)
+
+                bot_handler.send_reply(message, f"✅ Holiday skipping **{skip_text}**")
 
             else:
                 bot_handler.send_reply(message, "❌ Invalid config command. Use `/standup config` for help.")
@@ -912,11 +1038,15 @@ Ready to go! 🎯
             prompt_time = channel_config.get('prompt_time', '09:30')
             reminder_time = channel_config.get('reminder_time', '11:45')
             cutoff_time = channel_config.get('cutoff_time', '12:45')
+            days_config = channel_config.get('days', 'mon,tue,wed,thu,fri')
 
             # Parse times
             prompt_hour, prompt_minute = map(int, prompt_time.split(':'))
             reminder_hour, reminder_minute = map(int, reminder_time.split(':'))
             cutoff_hour, cutoff_minute = map(int, cutoff_time.split(':'))
+
+            # Parse days
+            allowed_days = self._parse_days_config(days_config)
 
             # Get timezone object
             tz = pytz.timezone(timezone)
@@ -924,7 +1054,7 @@ Ready to go! 🎯
             # Schedule prompt job
             self.scheduler.add_job(
                 self._send_standup_prompts,
-                CronTrigger(hour=prompt_hour, minute=prompt_minute, timezone=tz),
+                CronTrigger(hour=prompt_hour, minute=prompt_minute, day_of_week=','.join(map(str, allowed_days)), timezone=tz),
                 id=f'prompt_{stream_id}',
                 args=[stream_id],
                 replace_existing=True
@@ -933,7 +1063,7 @@ Ready to go! 🎯
             # Schedule reminder job
             self.scheduler.add_job(
                 self._send_standup_reminders,
-                CronTrigger(hour=reminder_hour, minute=reminder_minute, timezone=tz),
+                CronTrigger(hour=reminder_hour, minute=reminder_minute, day_of_week=','.join(map(str, allowed_days)), timezone=tz),
                 id=f'reminder_{stream_id}',
                 args=[stream_id],
                 replace_existing=True
@@ -942,13 +1072,14 @@ Ready to go! 🎯
             # Schedule summary job
             self.scheduler.add_job(
                 self._generate_and_post_summary,
-                CronTrigger(hour=cutoff_hour, minute=cutoff_minute, timezone=tz),
+                CronTrigger(hour=cutoff_hour, minute=cutoff_minute, day_of_week=','.join(map(str, allowed_days)), timezone=tz),
                 id=f'summary_{stream_id}',
                 args=[stream_id],
                 replace_existing=True
             )
 
-            logging.info(f"✅ Scheduled standup for stream {stream_id}: {prompt_time}, {reminder_time}, {cutoff_time} ({timezone})")
+            days_display = self._format_days_display(allowed_days)
+            logging.info(f"✅ Scheduled standup for stream {stream_id}: {prompt_time}, {reminder_time}, {cutoff_time} ({timezone}) on {days_display}")
 
         except Exception as e:
             logging.error(f"❌ Error scheduling standup for stream {stream_id}: {e}", exc_info=True)
@@ -988,6 +1119,20 @@ Ready to go! 🎯
                 logging.info(f"⏸️ Channel {stream_id} is not active, skipping prompts")
                 return
 
+            # Check if today is a holiday and we should skip
+            import datetime
+            today = datetime.date.today()
+            if not self._should_run_standup_on_date(today, channel):
+                skip_holidays = channel.get('skip_holidays', True)
+                holiday_country = channel.get('holiday_country', 'Nigeria')
+                
+                if skip_holidays and self._is_holiday(today, holiday_country):
+                    holiday_name = self._get_holiday_name(today, holiday_country)
+                    logging.info(f"🎉 Skipping standup for stream {stream_id} - Today is {holiday_name} in {holiday_country}")
+                else:
+                    logging.info(f"📅 Skipping standup for stream {stream_id} - Today is not a configured standup day")
+                return
+
             # Get participants
             participants = database.get_channel_participants(stream_id)
             if not participants:
@@ -999,6 +1144,10 @@ Ready to go! 🎯
 
             # Create prompt record
             database.create_standup_prompt(stream_id, stream_name, today, participants.copy())
+
+            # Calculate the last standup day for dynamic prompt
+            last_date, last_day_description = self._get_last_standup_day(channel)
+            logging.info(f"📅 Last standup day for {stream_name}: {last_day_description} ({last_date})")
 
             # Get user details
             client = self.bot_handler._client
@@ -1023,7 +1172,7 @@ Ready to go! 🎯
                     prompt_message = f"""
 👋 Hi **{user_name}**! Time for daily standup in **{stream_name}**.
 
-Please answer: **What did you work on yesterday?**
+Please answer: **What did you work on {last_day_description}?**
 
 (I'll ask you 2 more questions after this one)
 """
@@ -1044,6 +1193,15 @@ Please answer: **What did you work on yesterday?**
         """Send reminders to users who haven't responded."""
         try:
             logging.info(f"🔔 Sending reminders for stream {stream_id}")
+
+            # Check if today is a holiday and we should skip
+            channel = database.get_channel(stream_id)
+            if channel:
+                import datetime
+                today_date = datetime.date.today()
+                if not self._should_run_standup_on_date(today_date, channel):
+                    logging.info(f"📅 Skipping reminders for stream {stream_id} - Not a standup day")
+                    return
 
             today = datetime.datetime.now().strftime('%Y-%m-%d')
 
@@ -1122,7 +1280,17 @@ Please respond to complete your standup before the summary is posted.
                 logging.error(f"❌ Channel {stream_id} not found for summary")
                 return
 
+            # Check if today is a holiday and we should skip
+            import datetime as dt
+            today_date = dt.date.today()
+            if not self._should_run_standup_on_date(today_date, channel):
+                logging.info(f"📅 Skipping summary for stream {stream_id} - Not a standup day")
+                return
+
             stream_name = channel.get('stream_name', 'Unknown')
+
+            # Calculate the last standup day for summary labels
+            last_date, last_day_description = self._get_last_standup_day(channel)
 
             # Get all responses for today
             responses = database.get_all_standup_responses_for_stream_and_date(stream_id, today)
@@ -1169,8 +1337,8 @@ No standup responses were received today for **{stream_name}**.
                 if ai_summary.summary_generator.is_available() and formatted_responses:
                     summary_content = ai_summary.summary_generator.generate_summary(formatted_responses)
                 else:
-                    # Manual summary
-                    summary_content = self._generate_manual_summary(formatted_responses, today, stream_name, len(responses))
+                    # Manual summary with dynamic last day description
+                    summary_content = self._generate_manual_summary(formatted_responses, today, stream_name, len(responses), last_day_description)
 
             # Post summary to channel
             self._send_stream_message(
@@ -1188,7 +1356,7 @@ No standup responses were received today for **{stream_name}**.
         except Exception as e:
             logging.error(f"❌ Error generating summary for stream {stream_id}: {e}", exc_info=True)
 
-    def _generate_manual_summary(self, responses: List[Dict[str, str]], date: str, stream_name: str, total_responses: int) -> str:
+    def _generate_manual_summary(self, responses: List[Dict[str, str]], date: str, stream_name: str, total_responses: int, last_day_description: str = "yesterday") -> str:
         """Generate a manual summary when AI is not available."""
         if not responses:
             return f"""
@@ -1217,8 +1385,11 @@ No completed standup responses for **{stream_name}** today.
                 today = response.get('today', 'No response')
                 blockers = response.get('blockers', 'None')
 
+                # Capitalize the first letter of the day description for display
+                day_label = last_day_description.capitalize()
+                
                 summary += f"**{name}**\n"
-                summary += f"• Yesterday: {yesterday}\n"
+                summary += f"• {day_label}: {yesterday}\n"
                 summary += f"• Today: {today}\n"
                 summary += f"• Blockers: {blockers}\n\n"
         else:
@@ -1258,6 +1429,218 @@ No completed standup responses for **{stream_name}** today.
 
         except Exception as e:
             logging.error(f"❌ Daily maintenance error: {e}", exc_info=True)
+
+    # === HOLIDAY DETECTION UTILITIES ===
+
+    def _get_holiday_calendar(self, country: str):
+        """Get holiday calendar for the specified country."""
+        try:
+            import holidays
+            
+            country_map = {
+                'nigeria': holidays.Nigeria,
+                'ng': holidays.Nigeria,
+                'us': holidays.UnitedStates,
+                'usa': holidays.UnitedStates,
+                'united states': holidays.UnitedStates,
+                'united_states': holidays.UnitedStates,
+            }
+            
+            country_key = country.lower().strip()
+            holiday_class = country_map.get(country_key)
+            
+            if holiday_class:
+                return holiday_class()
+            else:
+                logging.warning(f"⚠️ Unsupported holiday country: {country}, falling back to Nigeria")
+                return holidays.Nigeria()
+                
+        except ImportError:
+            logging.error("❌ holidays library not installed, holiday detection disabled")
+            return None
+        except Exception as e:
+            logging.error(f"❌ Error creating holiday calendar for {country}: {e}")
+            return None
+
+    def _is_holiday(self, date_obj, country: str) -> bool:
+        """Check if a given date is a holiday in the specified country."""
+        try:
+            holiday_calendar = self._get_holiday_calendar(country)
+            if holiday_calendar is None:
+                return False
+            
+            return date_obj in holiday_calendar
+            
+        except Exception as e:
+            logging.error(f"❌ Error checking holiday for {date_obj} in {country}: {e}")
+            return False
+
+    def _get_holiday_name(self, date_obj, country: str) -> str:
+        """Get the name of the holiday on the given date."""
+        try:
+            holiday_calendar = self._get_holiday_calendar(country)
+            if holiday_calendar is None:
+                return "Holiday"
+            
+            return holiday_calendar.get(date_obj, "Holiday")
+            
+        except Exception as e:
+            logging.error(f"❌ Error getting holiday name for {date_obj} in {country}: {e}")
+            return "Holiday"
+
+    def _get_supported_countries(self) -> List[str]:
+        """Get list of supported holiday countries."""
+        return [
+            'Nigeria', 'ng',
+            'United States', 'US', 'USA'
+        ]
+
+    # === DAY FILTERING UTILITIES ===
+
+    def _parse_days_config(self, days_str: str) -> List[int]:
+        """Parse days configuration string to list of day numbers (0=Monday)."""
+        try:
+            if not days_str:
+                return [0, 1, 2, 3, 4]  # Default to weekdays
+            
+            days_str = days_str.lower().strip()
+            
+            # Handle shortcuts
+            if days_str in ['weekdays', 'workdays']:
+                return [0, 1, 2, 3, 4]  # Mon-Fri
+            elif days_str in ['weekend']:
+                return [5, 6]  # Sat-Sun
+            elif days_str in ['all', 'everyday', 'daily']:
+                return [0, 1, 2, 3, 4, 5, 6]  # All days
+            
+            # Parse comma-separated values
+            days = []
+            for day in days_str.split(','):
+                day = day.strip()
+                if day.isdigit():
+                    # Numeric format (0-6)
+                    day_num = int(day)
+                    if 0 <= day_num <= 6:
+                        days.append(day_num)
+                else:
+                    # Name format
+                    day_mapping = {
+                        'mon': 0, 'monday': 0,
+                        'tue': 1, 'tuesday': 1,
+                        'wed': 2, 'wednesday': 2,
+                        'thu': 3, 'thursday': 3,
+                        'fri': 4, 'friday': 4,
+                        'sat': 5, 'saturday': 5,
+                        'sun': 6, 'sunday': 6
+                    }
+                    if day in day_mapping:
+                        days.append(day_mapping[day])
+            
+            return sorted(list(set(days))) if days else [0, 1, 2, 3, 4]
+            
+        except Exception as e:
+            logging.error(f"❌ Error parsing days config '{days_str}': {e}")
+            return [0, 1, 2, 3, 4]  # Default to weekdays on error
+
+    def _validate_days_config(self, days_str: str) -> bool:
+        """Validate days configuration string."""
+        try:
+            parsed_days = self._parse_days_config(days_str)
+            return len(parsed_days) > 0 and all(0 <= day <= 6 for day in parsed_days)
+        except:
+            return False
+
+    def _format_days_display(self, days: List[int]) -> str:
+        """Format day numbers for display."""
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        if len(days) == 7:
+            return "Every day"
+        elif days == [0, 1, 2, 3, 4]:
+            return "Weekdays (Mon-Fri)"
+        elif days == [5, 6]:
+            return "Weekends (Sat-Sun)"
+        else:
+            return ", ".join(day_names[day] for day in sorted(days))
+
+    def _should_run_standup_on_date(self, check_date, channel_config: Dict[str, Any]) -> bool:
+        """Check if standup should run on a given date (considering days and holidays)."""
+        try:
+            import datetime
+            
+            # Check if it's in allowed days
+            days_config = channel_config.get('days', 'mon,tue,wed,thu,fri')
+            allowed_days = self._parse_days_config(days_config)
+            
+            if check_date.weekday() not in allowed_days:
+                return False
+            
+            # Check holidays if enabled
+            skip_holidays = channel_config.get('skip_holidays', True)
+            if skip_holidays:
+                holiday_country = channel_config.get('holiday_country', 'Nigeria')
+                if self._is_holiday(check_date, holiday_country):
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Error checking if standup should run on {check_date}: {e}")
+            return True  # Default to running if there's an error
+
+    def _get_last_standup_day(self, channel_config: Dict[str, Any]) -> Tuple[str, str]:
+        """
+        Calculate the last day standups were supposed to run based on configured days and holidays.
+        Returns tuple of (date_string, day_description) for use in prompts.
+        """
+        try:
+            import datetime
+            
+            days_config = channel_config.get('days', 'mon,tue,wed,thu,fri')
+            allowed_days = self._parse_days_config(days_config)
+            skip_holidays = channel_config.get('skip_holidays', True)
+            holiday_country = channel_config.get('holiday_country', 'Nigeria')
+            
+            # Sanity check
+            if not allowed_days:
+                logging.warning("⚠️ No allowed days configured, defaulting to weekdays")
+                allowed_days = [0, 1, 2, 3, 4]
+            
+            # Start from yesterday and work backwards
+            today = datetime.date.today()
+            check_date = today - datetime.timedelta(days=1)
+            
+            # Look back up to 14 days to find the last standup day
+            for _ in range(14):
+                # Check if standup should have run on this day
+                if self._should_run_standup_on_date(check_date, channel_config):
+                    # Format the date string
+                    date_str = check_date.strftime('%Y-%m-%d')
+                    
+                    # Calculate how many days ago it was
+                    days_ago = (today - check_date).days
+                    
+                    if days_ago == 1:
+                        day_description = "yesterday"
+                    elif days_ago == 2:
+                        day_description = "2 days ago"
+                    elif days_ago <= 7:
+                        day_name = check_date.strftime('%A')  # e.g., "Monday"
+                        day_description = f"last {day_name}"
+                    else:
+                        day_description = check_date.strftime('%A, %B %d')  # e.g., "Monday, January 15"
+                    
+                    return date_str, day_description
+                
+                # Go back one more day
+                check_date -= datetime.timedelta(days=1)
+            
+            # Fallback if no standup day found in last 14 days (e.g., first standup ever)
+            return (today - datetime.timedelta(days=1)).strftime('%Y-%m-%d'), "your last work session"
+            
+        except Exception as e:
+            logging.error(f"❌ Error calculating last standup day: {e}")
+            import datetime
+            return (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d'), "yesterday"
 
     # === UTILITY METHODS ===
 

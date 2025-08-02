@@ -52,6 +52,9 @@ This activates standup with default times (09:30 prompt, 11:45 reminder, 12:45 s
 - `/standup config reminder_time HH:MM` - When to send reminders
 - `/standup config cutoff_time HH:MM` - When to post summary
 - `/standup config times HH:MM HH:MM HH:MM` - Set all at once
+- `/standup config days weekdays` - Set which days to run
+- `/standup config holidays US` - Set holiday country (Nigeria/US)
+- `/standup config skip_holidays false` - Disable holiday skipping
 
 ### Utilities
 - `/standup history [days]` - View recent history
@@ -62,10 +65,29 @@ This activates standup with default times (09:30 prompt, 11:45 reminder, 12:45 s
 ## 🔄 How It Works
 
 1. **Setup**: When setting up standup, the bot automatically identifies human participants (excluding bots)
-2. **Daily Prompt** (e.g., 09:30): Bot sends private messages asking "What did you work on yesterday?"
+2. **Daily Prompt** (e.g., 09:30): Bot sends smart prompts asking about work since the last standup day
 3. **Interactive Questions**: Users respond and get follow-up questions about today's plans and blockers
 4. **Reminder** (e.g., 11:45): Non-responders get a friendly reminder
 5. **Summary** (e.g., 12:45): AI-generated summary posted to the channel
+
+### 🧠 Smart Prompts
+- **Dynamic Questions**: Instead of always asking "yesterday", prompts adapt based on configured days
+- **Weekend Awareness**: If running Mon-Fri only, Monday prompts ask about "last Friday"
+- **Holiday Handling**: Automatically calculates the actual last standup day
+- **Examples**:
+  - Regular day: "What did you work on yesterday?"
+  - After weekend: "What did you work on last Friday?"
+  - After gap: "What did you work on last Tuesday?"
+
+### 🎉 Holiday Support
+- **Automatic Holiday Detection**: Built-in support for Nigeria and United States holidays
+- **Smart Skipping**: Automatically skips standups on official holidays
+- **Configurable**: Enable/disable holiday skipping per channel
+- **Country Selection**: Choose between Nigeria and US holiday calendars
+- **Examples**:
+  - Nigerian Independence Day (Oct 1) - automatically skipped
+  - US Independence Day (July 4) - automatically skipped
+  - After holiday: "What did you work on last Wednesday?" (before the holiday)
 
 ### Smart Participant Detection
 - Automatically excludes bots from standup participants

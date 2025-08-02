@@ -17,6 +17,7 @@ A production-ready bot that automates daily team standups in Zulip. Features aut
   - [Setup in Zulip](#5-setup-in-zulip)
 - [📋 Commands Reference](#-commands-reference)
 - [🔄 How It Works](#-how-it-works)
+- [🎉 Holiday Detection & Smart Scheduling](#-holiday-detection--smart-scheduling)
 - [🏗️ Architecture](#️-architecture)
 - [🐳 Deployment](#-deployment)
 - [⚙️ Configuration Reference](#️-configuration-reference)
@@ -32,6 +33,9 @@ A production-ready bot that automates daily team standups in Zulip. Features aut
 
 - 🕐 **Automated Scheduling**: Daily prompts, reminders, and summaries with precise timing
 - 🌍 **Multi-timezone Support**: Each team member can set their own timezone
+- 🎉 **Holiday Detection**: Built-in support for Nigeria and US holidays with smart skipping
+- 🗓️ **Flexible Scheduling**: Configure custom days and automatic holiday handling
+- 🧠 **Smart Prompts**: Context-aware questions that adapt to gaps and holidays
 - 🤖 **AI-Powered Summaries**: Intelligent team summaries using OpenAI GPT or Groq
 - 💾 **PostgreSQL/SQLite Support**: Reliable data storage with connection pooling
 - 🛡️ **Production Ready**: Comprehensive error handling, logging, and monitoring
@@ -87,7 +91,7 @@ cd zulip-standup-bot
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install dependencies (includes holiday detection library)
 pip install -r requirements.txt
 
 # Install the bot
@@ -152,6 +156,10 @@ The bot will automatically:
 | `/standup config prompt_time HH:MM` | Change when daily prompts are sent |
 | `/standup config reminder_time HH:MM` | Change when reminders are sent |
 | `/standup config cutoff_time HH:MM` | Change when summaries are posted |
+| `/standup config times HH:MM HH:MM HH:MM` | Set all times at once |
+| `/standup config days weekdays` | Set which days to run (weekdays/weekend/all/custom) |
+| `/standup config holidays Nigeria` | Set holiday country (Nigeria/US) |
+| `/standup config skip_holidays true` | Enable/disable holiday skipping |
 | `/standup config timezone <tz>` | Set channel timezone (e.g., America/New_York) |
 
 ### Personal Settings
@@ -214,6 +222,112 @@ The bot will automatically:
 - **Weekend Detection**: Automatically skips weekends and holidays
 - **Participant Management**: Automatically excludes bots and inactive users
 - **Graceful Degradation**: Works without AI, database, or network issues
+
+## 🎉 Holiday Detection & Smart Scheduling
+
+### Automatic Holiday Support
+
+The bot includes built-in holiday detection for Nigeria and the United States, automatically skipping standups on official holidays and adapting prompts accordingly.
+
+#### Supported Countries
+
+**Nigeria 🇳🇬**
+- New Year's Day (January 1)
+- Independence Day (October 1)
+- Christmas Day (December 25)
+- Boxing Day (December 26)
+- All other official Nigerian holidays
+
+**United States 🇺🇸**
+- New Year's Day (January 1)
+- Independence Day (July 4)
+- Thanksgiving (4th Thursday in November)
+- Christmas Day (December 25)
+- All federal holidays including Memorial Day, Labor Day, etc.
+
+### How Holiday Detection Works
+
+1. **Automatic Skipping**: When a scheduled standup day falls on a holiday, the bot automatically skips prompts, reminders, and summaries
+2. **Smart Prompts**: After holidays, prompts ask about the last actual work day instead of "yesterday"
+3. **Configurable**: Each channel can enable/disable holiday detection and choose their country
+
+### Holiday Configuration
+
+#### Basic Setup
+```bash
+# Nigerian holidays (default)
+/standup setup
+
+# US holidays  
+/standup setup
+/standup config holidays US
+
+# Disable holiday skipping
+/standup config skip_holidays false
+```
+
+#### Advanced Configuration
+```bash
+# Set holiday country
+/standup config holidays Nigeria    # Nigerian holidays
+/standup config holidays US         # United States holidays
+
+# Control holiday skipping
+/standup config skip_holidays true   # Skip holidays (default)
+/standup config skip_holidays false  # Run on holidays too
+
+# Combine with custom days
+/standup config days weekdays        # Monday-Friday only
+/standup config holidays US          # + skip US holidays
+```
+
+### Smart Prompt Examples
+
+The bot automatically adapts prompts based on holidays and configured days:
+
+**Regular Tuesday:**
+> "What did you work on yesterday?"
+
+**Tuesday after Nigerian Independence Day (October 1):**
+> "What did you work on last Thursday?" *(skipped Friday holiday, weekend)*
+
+**Wednesday after US Thanksgiving:**
+> "What did you work on last Tuesday?" *(before the long weekend)*
+
+**Monday after Christmas weekend:**
+> "What did you work on last Friday?" *(before the holiday period)*
+
+### Holiday Status Display
+
+Use `/standup status` to see current holiday configuration:
+
+```
+🎯 Standup Status for #engineering
+
+📊 Configuration:
+• Status: ✅ Active
+• Timezone: America/New_York
+• Days: Weekdays (Mon-Fri)
+• Holiday Country: United States
+• Skip Holidays: ✅ Enabled
+• Participants: 8 members
+```
+
+Use `/standup debug` to see if today is a holiday:
+
+```
+📈 Channels:
+• engineering: Prompt at 09:30 UTC, Holidays: United States 🎉
+```
+
+*(The 🎉 emoji appears when today is a holiday)*
+
+### Deployment Considerations
+
+- **Default Behavior**: New channels default to Nigerian holidays with skipping enabled
+- **No Dependencies**: Holiday detection gracefully degrades if the `holidays` library isn't available
+- **Database Migration**: Existing deployments automatically get holiday support with sensible defaults
+- **Logging**: Holiday detection is logged for debugging and monitoring
 
 ## 🏗️ Architecture
 
@@ -324,6 +438,8 @@ sudo systemctl start standup-bot
 | `DEFAULT_PROMPT_TIME` | `09:30` | Default time to send prompts |
 | `DEFAULT_REMINDER_TIME` | `11:45` | Default time to send reminders |
 | `DEFAULT_CUTOFF_TIME` | `12:45` | Default time to post summaries |
+| `DEFAULT_HOLIDAY_COUNTRY` | `Nigeria` | Default holiday country (Nigeria/United States) |
+| `DEFAULT_SKIP_HOLIDAYS` | `true` | Default holiday skipping setting |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 
 ### Advanced Configuration

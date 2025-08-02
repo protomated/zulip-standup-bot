@@ -107,11 +107,41 @@ def create_tables(conn: sqlite3.Connection) -> None:
         cutoff_time TEXT DEFAULT '12:45',
         reminder_time TEXT DEFAULT '11:45',
         timezone TEXT DEFAULT 'Africa/Lagos',
+        days TEXT DEFAULT 'mon,tue,wed,thu,fri',
+        holiday_country TEXT DEFAULT 'Nigeria',
+        skip_holidays BOOLEAN DEFAULT 1,
         is_active BOOLEAN DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     """)
+    
+    # Add days column to existing channels table if it doesn't exist
+    cursor.execute("""
+    SELECT name FROM pragma_table_info('channels') WHERE name='days'
+    """)
+    if not cursor.fetchone():
+        cursor.execute("""
+        ALTER TABLE channels ADD COLUMN days TEXT DEFAULT 'mon,tue,wed,thu,fri'
+        """)
+    
+    # Add holiday_country column to existing channels table if it doesn't exist
+    cursor.execute("""
+    SELECT name FROM pragma_table_info('channels') WHERE name='holiday_country'
+    """)
+    if not cursor.fetchone():
+        cursor.execute("""
+        ALTER TABLE channels ADD COLUMN holiday_country TEXT DEFAULT 'Nigeria'
+        """)
+    
+    # Add skip_holidays column to existing channels table if it doesn't exist
+    cursor.execute("""
+    SELECT name FROM pragma_table_info('channels') WHERE name='skip_holidays'
+    """)
+    if not cursor.fetchone():
+        cursor.execute("""
+        ALTER TABLE channels ADD COLUMN skip_holidays BOOLEAN DEFAULT 1
+        """)
 
     # Create channel_participants table
     cursor.execute("""
