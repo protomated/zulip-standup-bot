@@ -2,42 +2,92 @@
 .git
 .gitignore
 
-# Python
+# Development files
+.env
+.env.*
+zuliprc
+.zuliprc
+botserverrc
+.botserverrc
+
+# Virtual environments
+venv/
+env/
+zulip-api-py3-venv/
+
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib64/
-parts/
-sdist/
-var/
 *.egg-info/
-.installed.cfg
-*.egg
+.pytest_cache/
+.mypy_cache/
 
-# Virtual Environment
-zulip-api-py3-venv/
-venv/
-ENV/
-
-# IDE files
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Logs
-*.log
+# OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
 
-# Test files
-.coverage
-htmlcov/
-.pytest_cache/
+# Logs and data
+logs/
+data/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation
+README_NEW.md
+cleanup_for_public_release.py
+codebase.md
+
+# Development scripts
+test_*.py
+debug_*.py
+validate_deployment.py
+create_deployment_tarball.sh
+run_diagnostic_in_container.sh
+production_webhook.py
+webhook_server.py
+cleanup_for_deployment.py
+deploy_to_caprover.py
+generate_botrc.py
+test_zulip_connection.py
+docker_env_test.py
+
+# Development docs
+STANDUP_SETUP_ENHANCEMENT.md
+test_deployment_summary.md
+DEPLOYMENT_CHECKLIST.md
+QUICK_DEPLOYMENT_GUIDE.md
+DEPLOYMENT.md
+
+# Backup files
+*.backup
+backups/
+*.tar.gz
+
+# Example/development compose files
+docker-compose.webhook.yml
+docker-compose.simple.yml
+docker-compose.production.yml
+docker-compose.standup.yml
+
+# Extra directories
+.junie/
+packaged_helloworld/
+tools/
+
+# Development configuration
+.codecov.yml
+.gitlint
+.mailmap
+.aidigestignore

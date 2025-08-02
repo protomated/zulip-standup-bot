@@ -15,11 +15,12 @@ class Config:
         self.zulip_site = os.getenv('ZULIP_SITE')
         self.zulip_bot_name = os.getenv('ZULIP_BOT_NAME', 'Standup Bot')
 
-        # OpenAI Configuration
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
+        # AI Configuration (Groq API - much cheaper than OpenAI)
+        self.groq_api_key = os.getenv('GROQ_API_KEY')
+        self.groq_model = os.getenv('GROQ_MODEL', 'llama-3.1-8b-instant')
 
-        # Database Configuration
-        self.database_url = os.getenv('DATABASE_URL')
+        # Database Configuration (SQLite)
+        self.sqlite_db_path = os.getenv('SQLITE_DB_PATH')  # Optional, defaults to local file
 
         # Bot Configuration
         self.default_timezone = os.getenv('DEFAULT_TIMEZONE', 'Africa/Lagos')
@@ -67,20 +68,21 @@ class Config:
         if missing_vars:
             logging.warning(f"Missing required environment variables: {', '.join(missing_vars)}")
 
-        # Log warning for missing OpenAI API key
-        if not self.openai_api_key:
-            logging.warning("OPENAI_API_KEY not set. AI summary generation will not be available.")
+        # Log warning for missing Groq API key
+        if not self.groq_api_key:
+            logging.warning("GROQ_API_KEY not set. AI summary generation will not be available.")
 
-        # Log warning for missing database URL
-        if not self.database_url:
-            logging.warning("DATABASE_URL not set. Will use in-memory storage instead.")
+        # Log warning for missing SQLite path (but it's optional)
+        if not self.sqlite_db_path:
+            logging.info("SQLITE_DB_PATH not set. Using default location for SQLite database.")
 
     def get_bot_config(self) -> Dict[str, Any]:
         """
         Get the bot configuration as a dictionary.
         """
         return {
-            'openai_api_key': self.openai_api_key,
+            'groq_api_key': self.groq_api_key,
+            'groq_model': self.groq_model,
             'default_timezone': self.default_timezone,
             'default_prompt_time': self.default_prompt_time,
             'default_cutoff_time': self.default_cutoff_time,
@@ -97,11 +99,11 @@ class Config:
             'site': self.zulip_site
         }
 
-    def get_database_url(self) -> Optional[str]:
+    def get_database_path(self) -> Optional[str]:
         """
-        Get the database URL.
+        Get the SQLite database path.
         """
-        return self.database_url
+        return self.sqlite_db_path
 
 # Create a singleton instance
 config = Config()

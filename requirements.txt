@@ -1,19 +1,32 @@
-setuptools
-crayons
-twine
-mock
-pytest
-pytest-cov
-ruff~=0.2.2
--e ./zulip
--e ./zulip_bots
--e ./zulip_botserver
-git+https://github.com/zulip/zulint@417b4e4971fdd5ca8e84847f1391b657b188631a#egg=zulint==1.0.0
-mypy==1.8.0
-types-beautifulsoup4
-types-httplib2
-types-python-dateutil
-types-pytz
-types-requests
-gitlint>=0.13.0
--r ./zulip/integrations/bridge_with_matrix/requirements.txt
+# Zulip Standup Bot Dependencies
+# Core bot framework
+zulip>=0.8.0
+zulip-bots>=0.8.0
+
+# Database support
+psycopg2-binary>=2.9.0  # PostgreSQL adapter
+# Note: sqlite3 is built into Python, no need to install
+
+# Scheduling
+APScheduler==3.10.4
+
+# Date/time handling
+pytz>=2023.3
+
+# HTTP requests
+requests>=2.31.0
+
+# AI integration (optional)
+openai>=1.0.0
+groq>=0.4.0
+
+# Development and testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.5.0
+flake8>=6.0.0
+
+# Security
+cryptography>=41.0.0

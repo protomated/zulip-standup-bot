@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  standup-bot:
+    build: .
+    container_name: zulip-standup-bot
+    ports:
+      - "5002:5002"
+    environment:
+      # Zulip Configuration - Required
+      - ZULIP_EMAIL=${ZULIP_EMAIL}
+      - ZULIP_API_KEY=${ZULIP_API_KEY}
+      - ZULIP_SITE=${ZULIP_SITE}
+      
+      # AI Configuration - Optional
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.1-8b-instant}
+      
+      # Database Configuration
+      - SQLITE_DB_PATH=/app/data/standup.db
+      
+      # Bot Configuration
+      - DEFAULT_TIMEZONE=${DEFAULT_TIMEZONE:-Africa/Lagos}
+      - DEFAULT_PROMPT_TIME=${DEFAULT_PROMPT_TIME:-09:30}
+      - DEFAULT_CUTOFF_TIME=${DEFAULT_CUTOFF_TIME:-12:45}
+      - DEFAULT_REMINDER_TIME=${DEFAULT_REMINDER_TIME:-11:45}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Docker flag
+      - DOCKER_ENV=true
+    volumes:
+      # Persist database
+      - standup_data:/app/data
+      # Mount logs for debugging
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  standup_data:
+    driver: local

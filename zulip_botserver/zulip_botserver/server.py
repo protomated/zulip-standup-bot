@@ -150,8 +150,15 @@ def load_bot_handlers(
         bot_file = bot_lib_modules[bot].__file__
         assert bot_file is not None
         bot_dir = os.path.dirname(os.path.abspath(bot_file))
+        # Create a ConfigParser object with the bot's configuration
+        bot_config_parser = configparser.ConfigParser()
+        if bot not in bot_config_parser.sections():
+            bot_config_parser.add_section(bot)
+        for key, value in bots_config[bot].items():
+            bot_config_parser.set(bot, key, value)
+
         bot_handler = lib.ExternalBotHandler(
-            client, bot_dir, bot_details={}, bot_config_parser=third_party_bot_conf
+            client, bot_dir, bot_details={}, bot_config_parser=bot_config_parser
         )
 
         bot_handlers[bot] = bot_handler
