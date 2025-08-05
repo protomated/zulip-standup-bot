@@ -1169,10 +1169,22 @@ Ready to go! 🎯
                     user_email = user['email']
                     user_name = user['full_name']
 
+                    # Get previous commitments for this user
+                    previous_commitments = self._get_user_previous_commitments(str(user_id), stream_id, last_date)
+                    
+                    # Build the prompt message
                     prompt_message = f"""
 👋 Hi **{user_name}**! Time for daily standup in **{stream_name}**.
 
-Please answer: **What did you work on {last_day_description}?**
+Please answer: **What did you work on {last_day_description}?**"""
+
+                    # Add previous commitments if available
+                    if previous_commitments:
+                        prompt_message += f"""
+
+💡 **Reminder**: {last_day_description.capitalize()}, you committed to: _{previous_commitments}_"""
+
+                    prompt_message += """
 
 (I'll ask you 2 more questions after this one)
 """
@@ -1335,7 +1347,7 @@ No standup responses were received today for **{stream_name}**.
 
                 # Generate summary using AI if available
                 if ai_summary.summary_generator.is_available() and formatted_responses:
-                    summary_content = ai_summary.summary_generator.generate_summary(formatted_responses)
+                    summary_content = ai_summary.summary_generator.generate_summary(formatted_responses, last_day_description)
                 else:
                     # Manual summary with dynamic last day description
                     summary_content = self._generate_manual_summary(formatted_responses, today, stream_name, len(responses), last_day_description)
@@ -1641,6 +1653,25 @@ No completed standup responses for **{stream_name}** today.
             logging.error(f"❌ Error calculating last standup day: {e}")
             import datetime
             return (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d'), "yesterday"
+
+    def _get_user_previous_commitments(self, user_id: str, stream_id: str, last_date: str) -> Optional[str]:
+        """Get the user's commitments from the previous standup day."""
+        try:
+            responses = database.get_all_standup_responses_for_stream_and_date(stream_id, last_date)
+            
+            for response in responses:
+                response_user_id = response.get('user_id') or response.get('zulip_user_id')
+                if str(response_user_id) == str(user_id):
+                    response_list = response.get('responses', [])
+                    # The commitment is typically the second response (today's plans from previous standup)
+                    if len(response_list) >= 2:
+                        return response_list[1]  # "What are you planning to work on today?"
+            
+            return None
+            
+        except Exception as e:
+            logging.error(f"❌ Error retrieving previous commitments for user {user_id}: {e}")
+            return None
 
     # === UTILITY METHODS ===
 
