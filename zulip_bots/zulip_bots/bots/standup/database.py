@@ -143,6 +143,15 @@ def create_tables(conn: sqlite3.Connection) -> None:
         ALTER TABLE channels ADD COLUMN skip_holidays BOOLEAN DEFAULT 1
         """)
 
+    # Add questions column to existing channels table if it doesn't exist
+    cursor.execute("""
+    SELECT name FROM pragma_table_info('channels') WHERE name='questions'
+    """)
+    if not cursor.fetchone():
+        cursor.execute("""
+        ALTER TABLE channels ADD COLUMN questions TEXT DEFAULT NULL
+        """)
+
     # Create channel_participants table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS channel_participants (
@@ -291,10 +300,14 @@ def update_channel(stream_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
         update_fields = []
         params = []
 
-        for field in ['prompt_time', 'cutoff_time', 'reminder_time', 'timezone', 'is_active', 'stream_name']:
+        for field in ['prompt_time', 'cutoff_time', 'reminder_time', 'timezone', 'is_active', 'stream_name', 'days', 'holiday_country', 'skip_holidays', 'questions']:
             if field in config:
                 update_fields.append(f"{field} = ?")
-                params.append(config[field])
+                # Handle JSON serialization for questions
+                if field == 'questions' and isinstance(config[field], list):
+                    params.append(json.dumps(config[field]))
+                else:
+                    params.append(config[field])
 
         # Add updated_at timestamp
         update_fields.append("updated_at = CURRENT_TIMESTAMP")
@@ -327,14 +340,33 @@ def get_channel(stream_id: str) -> Optional[Dict[str, Any]]:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM channels WHERE zulip_stream_id = ?", (stream_id,))
         channel = cursor.fetchone()
-        return dict(channel) if channel else None
+        if channel:
+            channel_dict = dict(channel)
+            # Parse questions JSON if present
+            if channel_dict.get('questions'):
+                try:
+                    channel_dict['questions'] = json.loads(channel_dict['questions'])
+                except:
+                    channel_dict['questions'] = None
+            return channel_dict
+        return None
 
 def get_all_active_channels() -> List[Dict[str, Any]]:
     """Get all active channels."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM channels WHERE is_active = 1")
-        return [dict(channel) for channel in cursor.fetchall()]
+        channels = []
+        for channel in cursor.fetchall():
+            channel_dict = dict(channel)
+            # Parse questions JSON if present
+            if channel_dict.get('questions'):
+                try:
+                    channel_dict['questions'] = json.loads(channel_dict['questions'])
+                except:
+                    channel_dict['questions'] = None
+            channels.append(channel_dict)
+        return channels
 
 # Channel participants operations
 def add_channel_participants(channel_id: str, user_ids: List[str]) -> None:
@@ -519,6 +551,10 @@ def create_or_update_standup_response(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # Get the number of questions for this channel
+        questions = get_channel_questions(stream_id)
+        num_questions = len(questions)
+
         # Check if response exists
         cursor.execute(
             "SELECT * FROM standup_responses WHERE zulip_user_id = ? AND zulip_stream_id = ? AND standup_date = ?",
@@ -542,7 +578,7 @@ def create_or_update_standup_response(
             # Update existing response
             responses = json.loads(existing['responses'])
             responses.append(response_text)
-            completed = len(responses) >= 3  # Mark completed after 3 responses
+            completed = len(responses) >= num_questions  # Mark completed when all questions answered
             responses_json = json.dumps(responses)
 
             cursor.execute(
@@ -663,6 +699,19 @@ def search_standup_responses(stream_id: str, search_term: str, limit: int = 20) 
             results.append(response_dict)
 
         return results
+
+def get_channel_questions(stream_id: str) -> List[str]:
+    """Get custom questions for a channel, or return defaults."""
+    channel = get_channel(stream_id)
+    if channel and channel.get('questions'):
+        return channel['questions']
+    
+    # Default questions
+    return [
+        "What did you work on {last_day}?",
+        "What are you planning to work on today?", 
+        "Any blockers or issues you're facing?"
+    ]
 
 def cleanup_old_data(days_to_keep: int = 90) -> None:
     """Clean up old standup data to keep database size manageable."""

@@ -61,6 +61,8 @@ class StandupHandler(AbstractBotHandler):
         • `/standup config days weekdays` - Set which days to run standups
         • `/standup config holidays Nigeria/US` - Set holiday country
         • `/standup config skip_holidays true/false` - Enable/disable holiday skipping
+        • `/standup config questions Q1, Q2, Q3` - Customize standup questions
+        • `/standup config questions reset` - Reset questions to defaults
 
         **Utilities:**
         • `/standup history [days]` - View recent standup history
@@ -454,6 +456,11 @@ Ready to go! 🎯
             skip_holidays = channel.get('skip_holidays', True)
             holiday_status = "✅ Enabled" if skip_holidays else "❌ Disabled"
 
+            # Get questions configuration
+            questions = database.get_channel_questions(stream_id)
+            questions_display = "\n".join([f"  {i+1}. {q}" for i, q in enumerate(questions)])
+            questions_status = "Custom" if channel.get('questions') else "Default"
+
             # Build status message
             is_active = channel.get('is_active', False)
             status_icon = "✅" if is_active else "⏸️"
@@ -474,6 +481,9 @@ Ready to go! 🎯
 • Reminder: {channel.get('reminder_time', 'N/A')}
 • Summary: {channel.get('cutoff_time', 'N/A')}
 
+**❓ Questions ({questions_status}):**
+{questions_display}
+
 **🕐 Next Scheduled:**
 {next_times}
 
@@ -482,6 +492,7 @@ Ready to go! 🎯
 • `/standup config times HH:MM HH:MM HH:MM` - Change schedule
 • `/standup config days weekdays` - Change days
 • `/standup config holidays US` - Change holiday country
+• `/standup config questions Q1, Q2, Q3` - Customize questions
 • `/standup debug` - Technical details
 """
 
@@ -696,12 +707,15 @@ Ready to go! 🎯
 • `/standup config days mon,tue,wed,thu,fri` - Set which days to run
 • `/standup config holidays Nigeria` - Set holiday country (Nigeria, US)
 • `/standup config skip_holidays true/false` - Enable/disable holiday skipping
+• `/standup config questions Q1, Q2, Q3` - Set custom questions (comma-separated)
+• `/standup config questions reset` - Reset questions to defaults
 
 **Examples:**
 • `/standup config times 09:30 11:45 13:00`
 • `/standup config days weekdays` - Monday to Friday only
 • `/standup config holidays US` - Use US holidays
 • `/standup config skip_holidays false` - Run on holidays too
+• `/standup config questions What are your top priorities?, Any roadblocks?` - Custom questions
 """)
             return
 
@@ -842,6 +856,51 @@ Ready to go! 🎯
 
                 bot_handler.send_reply(message, f"✅ Holiday skipping **{skip_text}**")
 
+            elif option == 'questions' and len(args) >= 2:
+                # Set custom questions
+                if args[1] == 'reset':
+                    # Reset to default questions
+                    database.update_channel(stream_id, {'questions': None})
+                    bot_handler.send_reply(message, "✅ Questions reset to defaults")
+                    return
+
+                # Parse questions from remaining args - support both comma-separated and individual args
+                questions_text = ' '.join(args[1:])
+                
+                # Check if it's comma-separated
+                if ',' in questions_text:
+                    questions = [q.strip() for q in questions_text.split(',') if q.strip()]
+                else:
+                    # Assume it's one question
+                    questions = [questions_text.strip()]
+                
+                if not questions or len(questions) > 5:
+                    bot_handler.send_reply(message, """❌ Invalid questions format
+
+**Usage:**
+• `/standup config questions reset` - Reset to defaults
+• `/standup config questions What did you do yesterday?, What will you do today?, Any blockers?` - Comma-separated
+• `/standup config questions What are your top 3 priorities today?` - Single question
+
+**Limits:** 1-5 questions maximum""")
+                    return
+
+                # Validate question format
+                for i, q in enumerate(questions):
+                    if len(q) > 200:
+                        bot_handler.send_reply(message, f"❌ Question {i+1} is too long (max 200 characters)")
+                        return
+
+                database.update_channel(stream_id, {'questions': questions})
+                
+                questions_list = "\n".join([f"• {q}" for q in questions])
+                bot_handler.send_reply(message, f"""✅ **Custom questions updated!**
+
+**New Questions:**
+{questions_list}
+
+**Note:** Questions support `{{last_day}}` placeholder for dynamic day references.""")
+
             else:
                 bot_handler.send_reply(message, "❌ Invalid config command. Use `/standup config` for help.")
 
@@ -980,14 +1039,22 @@ Ready to go! 🎯
             responses = response_data.get('responses', [])
             num_responses = len(responses)
 
-            # Send follow-up questions
-            if num_responses == 1:
-                self._send_private_message(bot_handler, user_email,
-                    "Thanks! What are you planning to work on today?")
-            elif num_responses == 2:
-                self._send_private_message(bot_handler, user_email,
-                    "Great! Any blockers or issues you're facing?")
-            elif num_responses >= 3:
+            # Get custom questions for this channel
+            questions = database.get_channel_questions(target_stream_id)
+            
+            # Send follow-up questions based on the configured questions
+            if num_responses < len(questions):
+                # Get the next question
+                next_question = questions[num_responses]
+                # Replace placeholder with appropriate day reference
+                channel = database.get_channel(target_stream_id)
+                if channel:
+                    _, last_day_description = self._get_last_standup_day(channel)
+                    next_question = next_question.replace('{last_day}', last_day_description)
+                
+                self._send_private_message(bot_handler, user_email, f"Thanks! {next_question}")
+            else:
+                # All questions answered
                 self._send_private_message(bot_handler, user_email,
                     "Perfect! Thank you for completing your standup. Your responses have been recorded. 🎉")
 
@@ -1149,6 +1216,12 @@ Ready to go! 🎯
             last_date, last_day_description = self._get_last_standup_day(channel)
             logging.info(f"📅 Last standup day for {stream_name}: {last_day_description} ({last_date})")
 
+            # Get custom questions for this channel
+            questions = database.get_channel_questions(stream_id)
+            first_question = questions[0] if questions else "What did you work on {last_day}?"
+            # Replace placeholder with the actual day description
+            first_question = first_question.replace('{last_day}', last_day_description)
+
             # Get user details
             client = self.bot_handler._client
             users_response = client.get_users()
@@ -1176,17 +1249,19 @@ Ready to go! 🎯
                     prompt_message = f"""
 👋 Hi **{user_name}**! Time for daily standup in **{stream_name}**.
 
-Please answer: **What did you work on {last_day_description}?**"""
+Please answer: **{first_question}**"""
 
-                    # Add previous commitments if available
-                    if previous_commitments:
+                    # Add previous commitments if available (only if it's about yesterday/past work)
+                    if previous_commitments and '{last_day}' in questions[0]:
                         prompt_message += f"""
 
 💡 **Reminder**: {last_day_description.capitalize()}, you committed to: _{previous_commitments}_"""
 
-                    prompt_message += """
+                    num_questions = len(questions)
+                    if num_questions > 1:
+                        prompt_message += f"""
 
-(I'll ask you 2 more questions after this one)
+(I'll ask you {num_questions - 1} more question{'s' if num_questions > 2 else ''} after this one)
 """
 
                     try:

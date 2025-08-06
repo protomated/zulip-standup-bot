@@ -36,11 +36,12 @@ A production-ready bot that automates daily team standups in Zulip. Features aut
 - 🎉 **Holiday Detection**: Built-in support for Nigeria and US holidays with smart skipping
 - 🗓️ **Flexible Scheduling**: Configure custom days and automatic holiday handling
 - 🧠 **Smart Prompts**: Context-aware questions that adapt to gaps and holidays
+- ❓ **Customizable Questions**: Tailor standup questions to your team's workflow (1-5 questions)
 - 🤖 **AI-Powered Summaries**: Intelligent team summaries using OpenAI GPT or Groq
 - 💾 **PostgreSQL/SQLite Support**: Reliable data storage with connection pooling
 - 🛡️ **Production Ready**: Comprehensive error handling, logging, and monitoring
 - 🐳 **Easy Deployment**: Docker, Docker Compose, and CapRover support
-- 🔄 **Interactive Workflow**: Three-step questionnaire for comprehensive updates
+- 🔄 **Interactive Workflow**: Flexible questionnaire with dynamic completion logic
 - 📊 **Rich Analytics**: Search history, view trends, and track participation
 
 ## 🚀 Quick Start
@@ -160,6 +161,8 @@ The bot will automatically:
 | `/standup config days weekdays` | Set which days to run (weekdays/weekend/all/custom) |
 | `/standup config holidays Nigeria` | Set holiday country (Nigeria/US) |
 | `/standup config skip_holidays true` | Enable/disable holiday skipping |
+| `/standup config questions Q1, Q2, Q3` | Set custom standup questions (comma-separated) |
+| `/standup config questions reset` | Reset questions to defaults |
 | `/standup config timezone <tz>` | Set channel timezone (e.g., America/New_York) |
 
 ### Personal Settings
@@ -200,12 +203,13 @@ The bot will automatically:
 
 1. **Morning Prompt** (e.g., 9:30 AM)
    - Bot sends private messages to all participants
-   - Asks: "What did you work on yesterday?"
+   - Asks the first configured question (default: "What did you work on yesterday?")
 
 2. **Interactive Questionnaire**
-   - After first response: "What are you planning to work on today?"
-   - After second response: "Any blockers or issues?"
-   - After third response: Thanks user and marks complete
+   - Bot asks follow-up questions based on your team's configuration
+   - Default: 3 questions about yesterday's work, today's plans, and blockers
+   - Custom: 1-5 questions tailored to your team's needs
+   - Completion marked when all questions are answered
 
 3. **Reminder** (e.g., 11:45 AM)
    - Friendly reminder sent to non-responders
@@ -213,6 +217,7 @@ The bot will automatically:
 
 4. **Summary** (e.g., 12:45 PM)
    - AI-generated summary posted to channel
+   - Adapts to your question structure automatically
    - Includes participation stats and key highlights
    - Falls back to manual summary if AI unavailable
 
@@ -489,6 +494,75 @@ STANDUP_QUESTIONS = [
     "What are your goals for today?",
     "What challenges are you facing?"
 ]
+```
+
+### Customizable Standup Questions
+
+The bot allows you to customize the questions asked during standups to better fit your team's workflow and needs.
+
+#### Default Questions
+
+By default, the bot asks these 3 questions:
+1. "What did you work on {last_day}?"
+2. "What are you planning to work on today?" 
+3. "Any blockers or issues you're facing?"
+
+#### Setting Custom Questions
+
+```bash
+# Set custom questions (comma-separated)
+/standup config questions What are your top 3 priorities today?, What help do you need from teammates?, What did you learn yesterday?
+
+# Single question workflow
+/standup config questions What's your main focus for today?
+
+# Reset to default questions
+/standup config questions reset
+```
+
+#### Question Features
+
+- **Dynamic Day References**: Use `{last_day}` placeholder to automatically reference the last working day
+- **Flexible Workflow**: Support 1-5 custom questions per standup
+- **Team-Specific**: Each channel can have different questions
+- **Smart Adaptation**: Bot adjusts prompts and completion logic based on question count
+
+#### Example Configurations
+
+**Engineering Team:**
+```bash
+/standup config questions What did you ship {last_day}?, What are you building today?, Any technical blockers?
+```
+
+**Product Team:**
+```bash  
+/standup config questions What customer insights did you gather {last_day}?, What features are you prioritizing today?, What feedback needs addressing?
+```
+
+**Sales Team:**
+```bash
+/standup config questions How many prospects did you contact {last_day}?, What deals are you closing today?, What support do you need?
+```
+
+**Coaching Cohort:**
+```bash
+/standup config questions What progress did you make on your goals {last_day}?, What are you committed to achieving today?, What support or accountability do you need?
+```
+
+**Single Question (Daily Focus):**
+```bash
+/standup config questions What is your #1 priority today and how can the team help?
+```
+
+#### Viewing Current Questions
+
+Check your current question configuration with `/standup status`:
+
+```
+❓ Questions (Custom):
+  1. What are your top 3 priorities today?
+  2. What help do you need from teammates?
+  3. What did you learn yesterday?
 ```
 
 ### Custom Time Zones
