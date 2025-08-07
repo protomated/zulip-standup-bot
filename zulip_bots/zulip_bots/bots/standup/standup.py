@@ -549,6 +549,7 @@ Ready to go! 🎯
             for channel in active_channels[:5]:  # Show first 5 channels
                 stream_name = channel.get('stream_name', 'Unknown')
                 prompt_time = channel.get('prompt_time', 'N/A')
+                channel_timezone = channel.get('timezone', 'Africa/Lagos')
                 holiday_country = channel.get('holiday_country', 'Nigeria')
                 skip_holidays = channel.get('skip_holidays', True)
                 
@@ -558,7 +559,7 @@ Ready to go! 🎯
                 is_holiday_today = self._is_holiday(today, holiday_country) if skip_holidays else False
                 holiday_indicator = " 🎉" if is_holiday_today else ""
                 
-                debug_msg += f"• **{stream_name}**: Prompt at {prompt_time} UTC, Holidays: {holiday_country}{holiday_indicator}\n"
+                debug_msg += f"• **{stream_name}**: Prompt at {self._format_time_with_timezone(prompt_time, channel_timezone)}, Holidays: {holiday_country}{holiday_indicator}\n"
 
             if len(active_channels) > 5:
                 debug_msg += f"• ... and {len(active_channels) - 5} more channels\n"
@@ -767,8 +768,9 @@ Ready to go! 🎯
                 database.update_channel(stream_id, config_updates)
                 self._reschedule_standup_for_channel(stream_id)
 
-                # Get channel timezone for display
-                channel_tz = channel.get('timezone', 'Africa/Lagos')
+                # Get UPDATED channel data for timezone display
+                updated_channel = database.get_channel(stream_id)
+                channel_tz = updated_channel.get('timezone', 'Africa/Lagos') if updated_channel else 'Africa/Lagos'
                 bot_handler.send_reply(message, f"""
 ✅ **Schedule updated!**
 • Prompt: {self._format_time_with_timezone(prompt_time, channel_tz)}
@@ -784,12 +786,20 @@ Ready to go! 🎯
                     bot_handler.send_reply(message, f"❌ Invalid time format: {time_value}")
                     return
 
+                # Update the time in database
                 database.update_channel(stream_id, {option: time_value})
-                self._reschedule_standup_for_channel(stream_id)
-
-                # Get updated channel data for timezone display
+                
+                # Get the UPDATED channel data (with current timezone)
                 updated_channel = database.get_channel(stream_id)
-                channel_tz = updated_channel.get('timezone', 'Africa/Lagos') if updated_channel else 'Africa/Lagos'
+                if not updated_channel:
+                    bot_handler.send_reply(message, "❌ Error retrieving channel data.")
+                    return
+                    
+                # Reschedule with the updated data
+                self._reschedule_standup_for_channel(stream_id)
+                
+                # Use the updated channel's timezone for display
+                channel_tz = updated_channel.get('timezone', 'Africa/Lagos')
                 
                 option_name = option.replace('_', ' ').title()
                 bot_handler.send_reply(message, f"✅ {option_name} set to **{self._format_time_with_timezone(time_value, channel_tz)}**")
@@ -901,7 +911,23 @@ Ready to go! 🎯
                 database.update_channel(stream_id, {'timezone': timezone_value})
                 self._reschedule_standup_for_channel(stream_id)
 
-                bot_handler.send_reply(message, f"✅ Channel timezone set to **{timezone_value}**\n\n💡 *Note: This affects when standup prompts are sent. Individual users can still set their personal timezone with `/standup timezone <tz>`*")
+                # Get the updated channel to show current schedule
+                updated_channel = database.get_channel(stream_id)
+                if updated_channel:
+                    prompt_time = updated_channel.get('prompt_time', '09:30')
+                    reminder_time = updated_channel.get('reminder_time', '11:45')
+                    cutoff_time = updated_channel.get('cutoff_time', '12:45')
+                    
+                    bot_handler.send_reply(message, f"""✅ Channel timezone set to **{timezone_value}**
+
+**📅 Updated Schedule:**
+• Prompt: {self._format_time_with_timezone(prompt_time, timezone_value)}
+• Reminder: {self._format_time_with_timezone(reminder_time, timezone_value)}
+• Summary: {self._format_time_with_timezone(cutoff_time, timezone_value)}
+
+💡 *Note: Individual users can still set their personal timezone with `/standup timezone <tz>`*""")
+                else:
+                    bot_handler.send_reply(message, f"✅ Channel timezone set to **{timezone_value}**\n\n💡 *Note: This affects when standup prompts are sent. Individual users can still set their personal timezone with `/standup timezone <tz>`*")
 
             elif option == 'questions' and len(args) >= 2:
                 # Set custom questions
