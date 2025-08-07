@@ -238,6 +238,7 @@ class StandupHandler(AbstractBotHandler):
             'search': self._handle_search_command,
             'debug': self._handle_debug_command,
             'test-prompt': self._handle_test_prompt_command,
+            'participants': self._handle_participants_command,
             'help': lambda m, b, a: bot_handler.send_reply(message, self.usage())
         }
 
@@ -391,9 +392,9 @@ class StandupHandler(AbstractBotHandler):
 
 **⏰ Schedule:**
 • **Days:** Weekdays (Mon-Fri)
-• **Prompt:** {prompt_time} UTC (questions sent to team)
-• **Reminder:** {reminder_time} UTC (for non-responders)
-• **Summary:** {cutoff_time} UTC (posted to channel)
+• **Prompt:** {self._format_time_with_timezone(prompt_time, 'Africa/Lagos')} (questions sent to team)
+• **Reminder:** {self._format_time_with_timezone(reminder_time, 'Africa/Lagos')} (for non-responders)
+• **Summary:** {self._format_time_with_timezone(cutoff_time, 'Africa/Lagos')} (posted to channel)
 
 **👥 Participants ({len(subscribers)}):**
 {participant_list}
@@ -476,10 +477,10 @@ Ready to go! 🎯
 • Skip Holidays: {holiday_status}
 • Participants: {len(participants)} members
 
-**⏰ Schedule (UTC):**
-• Prompt: {channel.get('prompt_time', 'N/A')}
-• Reminder: {channel.get('reminder_time', 'N/A')}
-• Summary: {channel.get('cutoff_time', 'N/A')}
+**⏰ Schedule:**
+• Prompt: {self._format_time_with_timezone(channel.get('prompt_time', '09:30'), timezone)}
+• Reminder: {self._format_time_with_timezone(channel.get('reminder_time', '11:45'), timezone)}
+• Summary: {self._format_time_with_timezone(channel.get('cutoff_time', '12:45'), timezone)}
 
 **❓ Questions ({questions_status}):**
 {questions_display}
@@ -659,9 +660,21 @@ Ready to go! 🎯
             bot_handler.send_reply(message, "❌ Error resuming standup.")
 
     def _handle_timezone_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler, args: List[str]) -> None:
-        """Set user's timezone."""
+        """Set or view user's timezone."""
+        user_id = str(message['sender_id'])
+        
         if not args:
-            bot_handler.send_reply(message, "❌ Please specify a timezone (e.g., `America/New_York`).")
+            # Show current user timezone
+            try:
+                user_data = database.get_user(user_id)
+                if user_data and user_data.get('timezone'):
+                    current_tz = user_data['timezone']
+                    bot_handler.send_reply(message, f"🌍 Your current timezone is **{current_tz}**\n\nTo change it, use: `/standup timezone <new_timezone>`")
+                else:
+                    bot_handler.send_reply(message, "🌍 You haven't set a timezone yet.\n\nSet it with: `/standup timezone <timezone>` (e.g., `America/New_York`)")
+            except Exception as e:
+                logging.error(f"❌ Error retrieving user timezone: {e}")
+                bot_handler.send_reply(message, "❌ Please specify a timezone (e.g., `America/New_York`).")
             return
 
         timezone_str = args[0]
@@ -707,6 +720,7 @@ Ready to go! 🎯
 • `/standup config days mon,tue,wed,thu,fri` - Set which days to run
 • `/standup config holidays Nigeria` - Set holiday country (Nigeria, US)
 • `/standup config skip_holidays true/false` - Enable/disable holiday skipping
+• `/standup config timezone <tz>` - Set channel timezone (e.g., America/New_York)
 • `/standup config questions Q1, Q2, Q3` - Set custom questions (comma-separated)
 • `/standup config questions reset` - Reset questions to defaults
 
@@ -752,11 +766,13 @@ Ready to go! 🎯
                 database.update_channel(stream_id, config_updates)
                 self._reschedule_standup_for_channel(stream_id)
 
+                # Get channel timezone for display
+                channel_tz = channel.get('timezone', 'Africa/Lagos')
                 bot_handler.send_reply(message, f"""
 ✅ **Schedule updated!**
-• Prompt: {prompt_time} UTC
-• Reminder: {reminder_time} UTC
-• Summary: {cutoff_time} UTC
+• Prompt: {self._format_time_with_timezone(prompt_time, channel_tz)}
+• Reminder: {self._format_time_with_timezone(reminder_time, channel_tz)}
+• Summary: {self._format_time_with_timezone(cutoff_time, channel_tz)}
 """)
 
             elif option in ['prompt_time', 'reminder_time', 'cutoff_time'] and len(args) == 2:
@@ -770,8 +786,12 @@ Ready to go! 🎯
                 database.update_channel(stream_id, {option: time_value})
                 self._reschedule_standup_for_channel(stream_id)
 
+                # Get updated channel data for timezone display
+                updated_channel = database.get_channel(stream_id)
+                channel_tz = updated_channel.get('timezone', 'Africa/Lagos') if updated_channel else 'Africa/Lagos'
+                
                 option_name = option.replace('_', ' ').title()
-                bot_handler.send_reply(message, f"✅ {option_name} set to **{time_value} UTC**")
+                bot_handler.send_reply(message, f"✅ {option_name} set to **{self._format_time_with_timezone(time_value, channel_tz)}**")
 
             elif option == 'days' and len(args) == 2:
                 # Set days configuration
@@ -855,6 +875,32 @@ Ready to go! 🎯
                 self._reschedule_standup_for_channel(stream_id)
 
                 bot_handler.send_reply(message, f"✅ Holiday skipping **{skip_text}**")
+
+            elif option == 'timezone' and len(args) == 2:
+                # Set channel timezone
+                timezone_value = args[1]
+                
+                # Validate timezone
+                try:
+                    pytz.timezone(timezone_value)
+                except pytz.exceptions.UnknownTimeZoneError:
+                    bot_handler.send_reply(message, f"""❌ Invalid timezone: {timezone_value}
+                    
+**Common timezones:**
+• `America/New_York` (Eastern Time)
+• `America/Chicago` (Central Time) 
+• `America/Los_Angeles` (Pacific Time)
+• `Europe/London` (GMT/BST)
+• `Africa/Lagos` (WAT)
+• `Asia/Tokyo` (JST)
+
+**Example:** `/standup config timezone America/New_York`""")
+                    return
+
+                database.update_channel(stream_id, {'timezone': timezone_value})
+                self._reschedule_standup_for_channel(stream_id)
+
+                bot_handler.send_reply(message, f"✅ Channel timezone set to **{timezone_value}**\n\n💡 *Note: This affects when standup prompts are sent. Individual users can still set their personal timezone with `/standup timezone <tz>`*")
 
             elif option == 'questions' and len(args) >= 2:
                 # Set custom questions
@@ -983,6 +1029,92 @@ Ready to go! 🎯
         except Exception as e:
             logging.error(f"❌ Search error: {e}", exc_info=True)
             bot_handler.send_reply(message, "❌ Error performing search.")
+
+    def _handle_participants_command(self, message: Dict[str, Any], bot_handler: AbstractBotHandler, args: List[str]) -> None:
+        """Show current participants in the standup."""
+        if message['type'] != 'stream':
+            bot_handler.send_reply(message, "❌ This command must be used in a channel.")
+            return
+
+        stream_id = str(message['stream_id'])
+        stream_name = message['display_recipient']
+
+        try:
+            # Check if standup is configured
+            channel = database.get_channel(stream_id)
+            if not channel:
+                bot_handler.send_reply(message, f"❌ Standup not configured for **{stream_name}**.\nUse `/standup setup` to get started!")
+                return
+
+            # Get participants
+            participants = database.get_channel_participants(stream_id)
+
+            if not participants:
+                bot_handler.send_reply(message, f"👥 **No participants found for {stream_name}**\n\nUse `/standup setup` to add participants automatically.")
+                return
+
+            # Get user details
+            client = bot_handler._client
+            users_response = client.get_users()
+
+            if users_response['result'] != 'success':
+                bot_handler.send_reply(message, "❌ Failed to get user details.")
+                return
+
+            users_map = {u['user_id']: u for u in users_response.get('members', [])}
+
+            # Build participant list
+            participant_details = []
+            for user_id in participants:
+                user_id_int = int(user_id) if isinstance(user_id, str) else user_id
+                user = users_map.get(user_id_int)
+                if user:
+                    # Get user's timezone if available
+                    user_data = database.get_user(str(user_id))
+                    timezone_info = ""
+                    if user_data and user_data.get('timezone'):
+                        timezone_info = f" ({user_data['timezone']})"
+                    
+                    participant_details.append({
+                        'name': user['full_name'],
+                        'email': user['email'],
+                        'timezone': timezone_info
+                    })
+                else:
+                    participant_details.append({
+                        'name': f'User {user_id}',
+                        'email': 'Unknown',
+                        'timezone': ''
+                    })
+
+            # Sort by name
+            participant_details.sort(key=lambda x: x['name'])
+
+            # Build message
+            participants_msg = f"""👥 **Participants for {stream_name}** ({len(participant_details)} members)
+
+"""
+
+            for p in participant_details:
+                participants_msg += f"• **{p['name']}**{p['timezone']}\n"
+
+            participants_msg += f"""
+
+**📊 Standup Configuration:**
+• Status: {'✅ Active' if channel.get('is_active', False) else '⏸️ Paused'}
+• Days: {self._format_days_display(self._parse_days_config(channel.get('days', 'mon,tue,wed,thu,fri')))}
+• Timezone: {channel.get('timezone', 'Africa/Lagos')}
+
+**💡 Management:**
+• Participants are automatically managed when using `/standup setup`
+• Individual users can set their timezone with `/standup timezone <tz>`
+"""
+
+            bot_handler.send_reply(message, participants_msg)
+
+        except Exception as e:
+            logging.error(f"❌ Participants error: {e}", exc_info=True)
+            bot_handler.send_reply(message, "❌ Error retrieving participants.")
 
     def _is_standup_response(self, message: Dict[str, Any]) -> bool:
         """Check if message is a standup response."""
@@ -1749,6 +1881,30 @@ No completed standup responses for **{stream_name}** today.
             return None
 
     # === UTILITY METHODS ===
+
+    def _format_time_with_timezone(self, time_str: str, timezone_str: str) -> str:
+        """Format time showing both channel timezone and UTC equivalent."""
+        try:
+            hour, minute = map(int, time_str.split(':'))
+            channel_tz = pytz.timezone(timezone_str)
+            utc_tz = pytz.UTC
+            
+            # Create a dummy date to calculate timezone offset
+            import datetime
+            today = datetime.date.today()
+            dt_channel = channel_tz.localize(datetime.datetime.combine(today, datetime.time(hour, minute)))
+            dt_utc = dt_channel.astimezone(utc_tz)
+            
+            utc_time_str = dt_utc.strftime('%H:%M')
+            
+            if timezone_str == 'UTC' or dt_channel.utctimetuple() == dt_utc.utctimetuple():
+                return f"{time_str} {timezone_str}"
+            else:
+                return f"{time_str} {timezone_str} ({utc_time_str} UTC)"
+                
+        except Exception as e:
+            logging.error(f"❌ Error formatting time: {e}")
+            return f"{time_str} {timezone_str}"
 
     def _calculate_next_run_times(self, channel: Dict[str, Any], timezone: str) -> str:
         """Calculate next run times for a channel."""
