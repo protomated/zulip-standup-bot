@@ -248,6 +248,14 @@ def update_user_timezone(user_id: str, timezone: str) -> Dict[str, Any]:
         cursor.execute("SELECT * FROM users WHERE zulip_user_id = ?", (user_id,))
         return dict(cursor.fetchone())
 
+def get_user(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get a user by ID."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE zulip_user_id = ?", (user_id,))
+        user = cursor.fetchone()
+        return dict(user) if user else None
+
 def get_user_timezone(user_id: str) -> str:
     """Get a user's timezone."""
     with get_db_connection() as conn:

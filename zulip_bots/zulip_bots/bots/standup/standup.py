@@ -392,9 +392,9 @@ class StandupHandler(AbstractBotHandler):
 
 **⏰ Schedule:**
 • **Days:** Weekdays (Mon-Fri)
-• **Prompt:** {self._format_time_with_timezone(prompt_time, 'Africa/Lagos')} (questions sent to team)
-• **Reminder:** {self._format_time_with_timezone(reminder_time, 'Africa/Lagos')} (for non-responders)
-• **Summary:** {self._format_time_with_timezone(cutoff_time, 'Africa/Lagos')} (posted to channel)
+• **Prompt:** {self._format_time_with_timezone(prompt_time, config_data['timezone'])} (questions sent to team)
+• **Reminder:** {self._format_time_with_timezone(reminder_time, config_data['timezone'])} (for non-responders)
+• **Summary:** {self._format_time_with_timezone(cutoff_time, config_data['timezone'])} (posted to channel)
 
 **👥 Participants ({len(subscribers)}):**
 {participant_list}
@@ -727,6 +727,7 @@ Ready to go! 🎯
 **Examples:**
 • `/standup config times 09:30 11:45 13:00`
 • `/standup config days weekdays` - Monday to Friday only
+• `/standup config timezone America/New_York` - Set channel timezone
 • `/standup config holidays US` - Use US holidays
 • `/standup config skip_holidays false` - Run on holidays too
 • `/standup config questions What are your top priorities?, Any roadblocks?` - Custom questions
